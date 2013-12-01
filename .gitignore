@@ -130,3 +130,8 @@ examples/undocumented/python_modular/*
 CMakeCache.txt
 /build
 /third_party
+
+# Eclipse IDE
+.cproject
+.project
+.pydevproject

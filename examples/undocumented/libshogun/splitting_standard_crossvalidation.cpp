@@ -63,6 +63,28 @@ int main(int argc, char **argv)
 
 			SGVector<index_t> subset=splitting->generate_subset_indices(i);
 			SGVector<index_t> inverse=splitting->generate_subset_inverse(i);
+			SGVector<index_t> total(num_labels);
+			SGVector<index_t>::fill_vector(total.vector, total.vlen,(index_t)-1);
+			SGVector<index_t>::display_vector(total.vector, total.vlen, "total");
+
+
+			for(index_t k=0;k<subset.vlen;++k)
+				total.vector[k]=subset.vector[k];
+			for(index_t j=0;j<inverse.vlen;++j)
+			{
+				SGVector<index_t> ha=total.find((index_t)inverse.vector[j]);
+				SG_SPRINT("\n%d\n",inverse.vector[j]);
+				SGVector<index_t>::display_vector(ha.vector, ha.vlen, "ha");
+				total.vector[j+subset.vlen]=inverse.vector[j];
+						
+				if (ha.vlen != 0)
+				SG_SPRINT("yes");
+				if(ha.vlen == 0)
+				SG_SPRINT("No");
+			}
+			//SGVector<index_t>::display_vector(ha.vector, ha.vlen, "ha");
+
+			SGVector<index_t>::display_vector(total.vector, total.vlen, "total");
 
 			SGVector<index_t>::display_vector(subset.vector, subset.vlen, "subset indices");
 			SGVector<index_t>::display_vector(inverse.vector, inverse.vlen, "inverse indices");

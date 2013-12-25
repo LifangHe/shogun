@@ -4,27 +4,28 @@
  * the Free Software Foundation; either version 3 of the License, or
  * (at your option) any later version.
  *
+ * Written (W) 2013 Saurabh Mahindre
  */
 
-#include <shogun/evaluation/CrossValidationSplitting.h>
+#include <shogun/evaluation/LOOCrossValidationSplitting.h>
 #include <shogun/labels/Labels.h>
 
 using namespace shogun;
 
-CCrossValidationSplitting::CCrossValidationSplitting() :
+CLOOCrossValidationSplitting::CLOOCrossValidationSplitting() :
 	CSplittingStrategy()
 {
 	m_rng = sg_rand;
 }
 
-CCrossValidationSplitting::CCrossValidationSplitting(
-		CLabels* labels, index_t num_subsets) :
-	CSplittingStrategy(labels, num_subsets)
+CLOOCrossValidationSplitting::CLOOCrossValidationSplitting(
+		CLabels* labels) :
+	CSplittingStrategy(labels, labels->get_num_labels())
 {
 	m_rng = sg_rand;
 }
 
-void CCrossValidationSplitting::build_subsets()
+void CLOOCrossValidationSplitting::build_subsets()
 {
 	/* ensure that subsets are empty and set flag to filled */
 	reset_subsets();
@@ -34,8 +35,6 @@ void CCrossValidationSplitting::build_subsets()
 	SGVector<index_t> indices(m_labels->get_num_labels());
 	indices.range_fill();
 	indices.permute(m_rng);
-
-	index_t num_subsets=m_subset_indices->get_num_elements();
 
 	/* distribute indices to subsets */
 	index_t current_subset=0;
@@ -52,12 +51,6 @@ void CCrossValidationSplitting::build_subsets()
 		SG_UNREF(current);
 
 		/* iterate over subsets */
-		current_subset=(current_subset+1); //% num_subsets;
+		current_subset=(current_subset+1);
 	}
-
-	/* finally shuffle to avoid that subsets with low indices have more
-	 * elements, which happens if the number of class labels is not equal to
-	 * the number of subsets (external random state important for threads) */
-//	m_subset_indices->shuffle(m_rng);
 }
-

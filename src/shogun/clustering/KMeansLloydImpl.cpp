@@ -12,6 +12,7 @@
 #include <shogun/features/DenseFeatures.h>
 #include <shogun/mathematics/Math.h>
 #include <shogun/io/SGIO.h>
+#include <shogun/mathematics/linalg/linalg.h>
 
 using namespace shogun;
 
@@ -28,8 +29,8 @@ void CKMeansLloydImpl::Lloyd_KMeans(int32_t k, CDistance* distance, int32_t max_
 	CDenseFeatures<float64_t>* rhs_mus=new CDenseFeatures<float64_t>(0);
 	CFeatures* rhs_cache=distance->replace_rhs(rhs_mus);
 
-	SGVector<float64_t> dists=SGVector<float64_t>(k*XSize);
-	dists.zero();
+//	SGVector<float64_t> dists=SGVector<float64_t>(k*XSize);
+//	dists.zero();
 
 	int32_t changed=1;
 	int32_t iter=0;
@@ -45,6 +46,7 @@ void CKMeansLloydImpl::Lloyd_KMeans(int32_t k, CDistance* distance, int32_t max_
 
 		if (iter%1000 == 0)
 			SG_SINFO("Iteration[%d/%d]: Assignment of %i patterns changed.\n", iter, max_iter, changed)
+			SG_SPRINT("iter %d, %i", iter, changed)
 		changed=0;
 
 		if (!fixed_centers)
@@ -62,35 +64,40 @@ void CKMeansLloydImpl::Lloyd_KMeans(int32_t k, CDistance* distance, int32_t max_
 
 				lhs->free_feature_vector(vec, i, vfree);
 			}
-
-			for (int32_t i=0; i<k; i++)
+			SGMatrix<float64_t> weights(k, dimensions);//=SGMatrix<float64_t>(dimensions, k);
+		//	weights.transpose_matrix();
+			linalg::set_rows_const(weights, weights_set);
+			SGMatrix<float64_t>::transpose_matrix(weights.matrix, weights.num_rows, weights.num_cols);
+			linalg::elementwise_compute_inplace(weights, [](float64_t& w)
 			{
-				if (weights_set[i]!=0.0)
-				{
-					for (int32_t j=0; j<dimensions; j++)
-						mus.matrix[i*dimensions+j] /= weights_set[i];
-				}
-			}
+				return 1/w;  
+			});
+
+			linalg::elementwise_product(mus, weights, mus);
+		
+//			for (int32_t i=0; i<k; i++)
+//			{
+//				if (weights_set[i]!=0.0)
+//				{
+//					for (int32_t j=0; j<dimensions; j++)
+//						mus.matrix[i*dimensions+j] /= weights_set[i];
+//				}
+//			}
 		}
 		rhs_mus->copy_feature_matrix(mus);
 		for (int32_t i=0; i<XSize; i++)
 		{
-			/* ks=ceil(rand(1,XSize)*XSize) ; */
-			const int32_t Pat=CMath::random(0, XSize-1);
+			const int32_t Pat=i;
 			const int32_t ClList_Pat=ClList[Pat];
 			int32_t imini, j;
 			float64_t mini;
 
-			/* compute the distance of this point to all centers */
-			for(int32_t idx_k=0;idx_k<k;idx_k++)
-				dists[idx_k]=distance->distance(Pat,idx_k);
-
 			/* [mini,imini]=min(dists(:,i)) ; */
-			imini=0 ; mini=dists[0];
+			imini=0 ; mini=distance->distance(Pat,0);
 			for (j=1; j<k; j++)
-				if (dists[j]<mini)
+				if (distance->distance(Pat,j)<mini)
 				{
-					mini=dists[j];
+					mini=distance->distance(Pat,j);
 					imini=j;
 				}
 
@@ -103,37 +110,6 @@ void CKMeansLloydImpl::Lloyd_KMeans(int32_t k, CDistance* distance, int32_t max_
 				/* weights_set(j)     = weights_set(j)     - 1.0 ; */
 				weights_set[ClList_Pat]-= 1.0;
 
-				vec=lhs->get_feature_vector(Pat, vlen, vfree);
-
-				for (j=0; j<dimensions; j++)
-				{
-					mus.matrix[imini*dimensions+j]-=
-						(vec[j]-mus.matrix[imini*dimensions+j]) / weights_set[imini];
-				}
-
-				lhs->free_feature_vector(vec, Pat, vfree);
-
-				/* mu_new = mu_old - (x - mu_old)/(n-1) */
-				/* if weights_set(j)~=0 */
-				if (weights_set[ClList_Pat]!=0.0)
-				{
-					vec=lhs->get_feature_vector(Pat, vlen, vfree);
-
-					for (j=0; j<dimensions; j++)
-					{
-						mus.matrix[ClList_Pat*dimensions+j]-=
-								(vec[j]-mus.matrix[ClList_Pat*dimensions+j]) / weights_set[ClList_Pat];
-					}
-					lhs->free_feature_vector(vec, Pat, vfree);
-				}
-				else
-				{
-					/*  mus(:,j)=zeros(dimensions,1) ; */
-					for (j=0; j<dimensions; j++)
-						mus.matrix[ClList_Pat*dimensions+j]=0;
-				}
-
-				/* ClList(i)= imini ; */
 				ClList[Pat] = imini;
 			}
 		}

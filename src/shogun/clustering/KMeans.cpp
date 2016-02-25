@@ -80,32 +80,71 @@ void CKMeans::set_random_centers(SGVector<float64_t> weights_set, SGVector<int32
 	CDenseFeatures<float64_t>* lhs=
 		CDenseFeatures<float64_t>::obtain_from_generic(distance->get_lhs());
 
-	for (int32_t i=0; i<XSize; i++)
+	for (int32_t i=0; i<k; i++)
 	{
-		const int32_t Cl=CMath::random(0, k-1);
-		weights_set[Cl]+=1.0;
-		ClList[i]=Cl;
+		const int32_t Cl=CMath::random(0, XSize-1);
+		//weights_set[Cl]+=1.0;
+		//ClList[i]=Cl;
 
 		int32_t vlen=0;
 		bool vfree=false;
-		float64_t* vec=lhs->get_feature_vector(i, vlen, vfree);
+		float64_t* vec=lhs->get_feature_vector(Cl, vlen, vfree);
 
 		for (int32_t j=0; j<dimensions; j++)
-			mus.matrix[Cl*dimensions+j] += vec[j];
+			mus.matrix[i*dimensions+j] = vec[j];
 
-		lhs->free_feature_vector(vec, i, vfree);
+		lhs->free_feature_vector(vec, Cl, vfree);
 	}
 
-	SG_UNREF(lhs);
+//	for (int32_t i=0; i<k; i++)
+//	{
+//		if (weights_set[i]!=0.0)
+//		{
+//			for (int32_t j=0; j<dimensions; j++)
+//				mus.matrix[i*dimensions+j] /= weights_set[i];
+//		}
+//	}
 
-	for (int32_t i=0; i<k; i++)
+	CDenseFeatures<float64_t>* rhs_mus=new CDenseFeatures<float64_t>(0);
+	CFeatures* rhs_cache=distance->replace_rhs(rhs_mus);
+	rhs_mus->copy_feature_matrix(mus);
+
+	SGVector<float64_t> dists=SGVector<float64_t>(k*XSize);
+	dists.zero();
+
+	for(int32_t idx=0;idx<XSize;idx++)
 	{
-		if (weights_set[i]!=0.0)
-		{
-			for (int32_t j=0; j<dimensions; j++)
-				mus.matrix[i*dimensions+j] /= weights_set[i];
-		}
+		for(int32_t m=0;m<k;m++)
+			dists[k*idx+m] = distance->distance(idx,m);
 	}
+
+	for (int32_t i=0; i<XSize; i++)
+	{
+		float64_t mini=dists[i*k];
+		int32_t Cl = 0, j;
+
+		for (j=1; j<k; j++)
+		{
+			if (dists[i*k+j]<mini)
+			{
+				Cl=j;
+				mini=dists[i*k+j];
+			}
+		}
+		ClList[i]=Cl;
+	}
+
+	/* Compute the sum of all points belonging to a cluster
+	 * and count the points */
+	for (int32_t i=0; i<XSize; i++)
+	{
+		const int32_t Cl = ClList[i];
+		weights_set[Cl]+=1.0;
+	}
+	SG_UNREF(lhs);
+	distance->replace_rhs(rhs_cache);
+	delete rhs_mus;
+
 }
 
 void CKMeans::set_initial_centers(SGVector<float64_t> weights_set,

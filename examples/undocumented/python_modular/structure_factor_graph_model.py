@@ -30,31 +30,31 @@ def gen_data(ftype, num_samples, show_data = False):
 	samples = FactorGraphFeatures(num_samples)
 	labels = FactorGraphLabels(num_samples)
 
-	for i in xrange(num_samples):
+	for i in range(num_samples):
 		vc = np.array([2,2,2], np.int32)
 		fg = FactorGraph(vc)
 
-		data1 = np.array([2.0*Math.random(0.0,1.0)-1.0 for i in xrange(2)])
+		data1 = np.array([2.0*Math.random(0.0,1.0)-1.0 for i in range(2)])
 		vind1 = np.array([0,1], np.int32)
 		fac1 = Factor(ftype[0], vind1, data1)
 		fg.add_factor(fac1)
 
-		data2 = np.array([2.0*Math.random(0.0,1.0)-1.0 for i in xrange(2)])
+		data2 = np.array([2.0*Math.random(0.0,1.0)-1.0 for i in range(2)])
 		vind2 = np.array([1,2], np.int32)
 		fac2 = Factor(ftype[0], vind2, data2)
 		fg.add_factor(fac2)
 
-		data3 = np.array([2.0*Math.random(0.0,1.0)-1.0 for i in xrange(2)])
+		data3 = np.array([2.0*Math.random(0.0,1.0)-1.0 for i in range(2)])
 		vind3 = np.array([0], np.int32)
 		fac3 = Factor(ftype[1], vind3, data3)
 		fg.add_factor(fac3)
 
-		data4 = np.array([2.0*Math.random(0.0,1.0)-1.0 for i in xrange(2)])
+		data4 = np.array([2.0*Math.random(0.0,1.0)-1.0 for i in range(2)])
 		vind4 = np.array([1], np.int32)
 		fac4 = Factor(ftype[1], vind4, data4)
 		fg.add_factor(fac4)
 
-		data5 = np.array([2.0*Math.random(0.0,1.0)-1.0 for i in xrange(2)])
+		data5 = np.array([2.0*Math.random(0.0,1.0)-1.0 for i in range(2)])
 		vind5 = np.array([2], np.int32)
 		fac5 = Factor(ftype[1], vind5, data5)
 		fg.add_factor(fac5)
@@ -81,7 +81,7 @@ def gen_data(ftype, num_samples, show_data = False):
 
 		if show_data:
 			state = fg_obs.get_data()
-			print state
+			print(state)
 
 	return samples, labels
 
@@ -97,7 +97,7 @@ parameter_list = [[samples,labels,w_all,ftype_all]]
 def structure_factor_graph_model(tr_samples = samples, tr_labels = labels, w = w_all, ftype = ftype_all):
 	from modshogun import SOSVMHelper, LabelsFactory
 	from modshogun import FactorGraphModel, MAPInference, TREE_MAX_PROD
-	from modshogun import DualLibQPBMSOSVM, StochasticSOSVM
+	from modshogun import DualLibQPBMSOSVM, StochasticSOSVM, FWSOSVM
 
 	# create model
 	model = FactorGraphModel(tr_samples, tr_labels, TREE_MAX_PROD, False)
@@ -122,10 +122,10 @@ def structure_factor_graph_model(tr_samples = samples, tr_labels = labels, w = w
 	#print w_truth
 
 	# evaluation
-	lbs_bmrm = LabelsFactory.to_structured(bmrm.apply())
+	lbs_bmrm = bmrm.apply()
 	acc_loss = 0.0
 	ave_loss = 0.0
-	for i in xrange(num_samples):
+	for i in range(num_samples):
 		y_pred = lbs_bmrm.get_label(i)
 		y_truth = tr_labels.get_label(i)
 		acc_loss = acc_loss + model.delta_loss(y_truth, y_pred)
@@ -150,6 +150,21 @@ def structure_factor_graph_model(tr_samples = samples, tr_labels = labels, w = w
 	#print('SGD: Average training error is %.4f' % SOSVMHelper.average_loss(sgd.get_w(), model))
 	#hp = sgd.get_helper()
 	#print hp.get_primal_values()
+	#print hp.get_eff_passes()
+	#print hp.get_train_errors()
+
+	# --- training with FW ---
+	fw = FWSOSVM(model, tr_labels)
+	#fw.set_verbose(True)
+	fw.set_lambda(0.01)
+	fw.set_gap_threshold(0.01)
+	fw.train()
+
+	# evaluation
+	#print('FW: Average training error is %.4f' % SOSVMHelper.average_loss(fw.get_w(), model))
+	#hp = fw.get_helper()
+	#print hp.get_primal_values()
+	#print hp.get_dual_values()
 	#print hp.get_eff_passes()
 	#print hp.get_train_errors()
 

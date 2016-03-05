@@ -38,6 +38,15 @@ CVwRegressor::~CVwRegressor()
 {
 	// TODO: the number of weight_vectors depends on num_threads
 	// this should be reimplemented using SGVector (for reference counting)
+	if (weight_vectors)
+	{
+		vw_size_t num_threads = 1;
+		for (vw_size_t i = 0; i < num_threads; i++)
+		{
+			SG_FREE(weight_vectors[i]);
+		}
+	}
+
 	SG_FREE(weight_vectors);
 	SG_UNREF(loss);
 	SG_UNREF(env);
@@ -80,6 +89,7 @@ void CVwRegressor::init(CVwEnvironment* env_to_use)
 	}
 }
 
+// TODO: remove this, as we have serialization FW
 void CVwRegressor::dump_regressor(char* reg_name, bool as_text)
 {
 	CIOBuffer io_temp;
@@ -167,6 +177,7 @@ void CVwRegressor::dump_regressor(char* reg_name, bool as_text)
 	io_temp.close_file();
 }
 
+// TODO: remove this, as we have serialization FW
 void CVwRegressor::load_regressor(char* file)
 {
 	CIOBuffer source;

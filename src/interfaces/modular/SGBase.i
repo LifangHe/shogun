@@ -2,22 +2,18 @@
 %include "stdint.i"
 %include "exception.i"
 
-%define SERIALIZABLE_DUMMY(SWIGCLASS)
-%extend SWIGCLASS {
-bool save_serializable(CSerializableFile* file, const char* prefix="") { return false; };
-bool load_serializable(CSerializableFile* file, const char* prefix="") { return false; };
-}
-%enddef
+%feature("ref")   shogun::CSGObject "SG_REF($this);"
+%feature("unref") shogun::CSGObject "SG_UNREF($this);"
 
 #ifdef SWIGJAVA
-%typemap(javainterfaces) SWIGTYPE "java.io.Externalizable"
+%typemap(javainterfaces) shogun::CSGObject "java.io.Externalizable"
 
-%typemap(javaincludes) SWIGTYPE
+%typemap(javaimports) shogun::CSGObject
 %{
 import org.shogun.SerializableFile;
 import org.shogun.SerializableAsciiFile;
 %}
-%typemap(javacode) SWIGTYPE
+%typemap(javacode) shogun::CSGObject
 %{
 public void writeExternal(java.io.ObjectOutput out) throws java.io.IOException {
         java.util.Random randomGenerator = new java.util.Random();
@@ -103,9 +99,7 @@ public void readExternal(java.io.ObjectInput in) throws java.io.IOException, jav
  /* required for python */
  #define SWIG_FILE_WITH_INIT
 
-#if defined(SWIGJAVA) || defined(SWIGCSHARP)
  #include <shogun/base/init.h>
-#endif
  #include <shogun/lib/common.h>
  #include <shogun/io/SGIO.h>
  #include <shogun/lib/ShogunException.h>
@@ -309,8 +303,6 @@ public void readExternal(java.io.ObjectInput in) throws java.io.IOException, jav
 %ignore sg_print_error;
 %ignore sg_cancel_computations;
 
-%feature("ref")   CSGObject "SG_REF($this);"
-%feature("unref") CSGObject "SG_UNREF($this);"
 
 %rename(SGObject) CSGObject;
 
@@ -329,14 +321,10 @@ namespace std {
 #ifndef SWIGR
 %include <shogun/base/init.h>
 #endif
-%include <shogun/io/SGIO.h>
-SERIALIZABLE_DUMMY(shogun::SGIO);
-
 %include <shogun/base/SGObject.h>
+%include <shogun/io/SGIO.h>
 %include <shogun/base/Version.h>
-SERIALIZABLE_DUMMY(shogun::Version);
 %include <shogun/base/Parallel.h>
-SERIALIZABLE_DUMMY(shogun::Parallel);
 
 #ifdef SWIGPYTHON
 namespace shogun
@@ -460,19 +448,27 @@ except ImportError:
     import copyreg as copy_reg
 def _sg_reconstructor(cls, base, state):
     try:
-        if not isinstance(cls(), SGObject):
-            return _py_orig_reconstructor(cls, base, state)
+        if isinstance(cls, str) and cls.startswith('modshogun.'):
+            if base is object:
+                import modshogun
+                return eval(cls+'()')
+            else:
+                base.__new__(cls, state)
+                if base.__init__ != object.__init__:
+                    base.__init__(obj, state)
+            return obj
+        if isinstance(cls(), SGObject):
+            if base is object:
+                 obj = cls()
+            else:
+                obj = base.__new__(cls, state)
+                if base.__init__ != object.__init__:
+                    base.__init__(obj, state)
+            return obj
+
+        return _py_orig_reconstructor(cls, base, state)
     except:
         return _py_orig_reconstructor(cls, base, state)
-
-    if base is object:
-        obj = cls() #object.__new__(cls)
-    else:
-        obj = base.__new__(cls, state)
-        if base.__init__ != object.__init__:
-            base.__init__(obj, state)
-    return obj
-
 
 def _sg_reduce_ex(self, proto):
     try:
@@ -481,14 +477,11 @@ def _sg_reduce_ex(self, proto):
     except:
         return _py_orig_reduce_ex(self, proto)
 
-    base = object # not really reachable
-    if base is object:
-        state = None
-    else:
-        if base is self.__class__:
-            raise TypeError("can't pickle %s objects" % base.__name__)
-        state = base(self)
-    args = (self.__class__, base, state)
+    base = object
+    state = None
+    args = ('modshogun.' + self.get_name(), base, state)
+
+
     try:
         getstate = self.__getstate__
     except AttributeError:
@@ -512,5 +505,6 @@ _py_orig_reconstructor=copy_reg._reconstructor
 copy_reg._reduce_ex=_sg_reduce_ex
 copy_reg._reconstructor=_sg_reconstructor
 %}
+
 
 #endif /* SWIGPYTHON  */

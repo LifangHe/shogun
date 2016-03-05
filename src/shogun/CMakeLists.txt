@@ -1,13 +1,56 @@
 if(SYSTEM_INCLUDES)
   INCLUDE_DIRECTORIES(SYSTEM ${SYSTEM_INCLUDES})
 endif()
-include_directories(${INCLUDES} . ..)
+include_directories(${INCLUDES})
 
 FILE(GLOB_RECURSE LIBSHOGUN_SRC *.${EXT_SRC_CPP} *.${EXT_SRC_C})
 FILE(GLOB_RECURSE LIBSHOGUN_HEADERS *.${EXT_SRC_HEADER})
 FILE(GLOB_RECURSE LIBSHOGUN_SRC_TMP *.${EXT_CPP_TMP})
 
-add_library(shogun SHARED ${LIBSHOGUN_SRC} lib/config.h base/class_list.cpp)
+IF (PROTOBUF_FOUND)
+	FILE(GLOB protobuf_src ${CMAKE_CURRENT_SOURCE_DIR}/io/protobuf/*.proto)
+
+	FOREACH(FIL ${protobuf_src})
+		get_filename_component(FIL_WE ${FIL} NAME_WE)
+		SET(name "${CMAKE_CURRENT_SOURCE_DIR}/io/protobuf/${FIL_WE}")
+
+		if (EXISTS "${name}.pb.cc")
+			file(REMOVE "${name}.pb.cc")
+		endif()
+		if (EXISTS "${name}.pb.h")
+			file(REMOVE "${name}.pb.h")
+		endif()
+
+		list(APPEND LIBSHOGUN_SRC "${name}.pb.cc")
+		list(APPEND LIBSHOGUN_HEADERS "${name}.pb.h")
+	ENDFOREACH()
+ENDIF()
+
+# add target to compile the libshogun sources
+add_library(libshogun OBJECT ${LIBSHOGUN_SRC} base/class_list.cpp)
+set_target_properties(libshogun PROPERTIES
+    POSITION_INDEPENDENT_CODE TRUE)
+IF (SANITIZER_FLAGS)
+  set_target_properties(libshogun PROPERTIES COMPILE_FLAGS ${SANITIZER_FLAGS})
+ENDIF()
+
+IF (PROTOBUF_FOUND)
+	FOREACH(FIL ${protobuf_src})
+		get_filename_component(FIL_WE ${FIL} NAME_WE)
+
+		SET(name "${CMAKE_CURRENT_SOURCE_DIR}/io/protobuf/${FIL_WE}")
+
+		ADD_CUSTOM_COMMAND(
+			 OUTPUT "${name}.pb.cc" "${name}.pb.h"
+			 COMMAND ${PROTOBUF_PROTOC_EXECUTABLE} ${FIL}
+				 --cpp_out ${CMAKE_CURRENT_SOURCE_DIR}/io/protobuf
+				 --proto_path ${CMAKE_CURRENT_SOURCE_DIR}/io/protobuf
+			 COMMENT "Running C++ protocol buffer compiler on ${FIL_WE}.proto"
+			)
+		ADD_CUSTOM_TARGET("${FIL_WE}Protobuf" DEPENDS "${name}.pb.cc")
+		add_dependencies(libshogun "${FIL_WE}Protobuf")
+	ENDFOREACH()
+ENDIF()
 
 # Generate versionstring.h
 ADD_CUSTOM_TARGET(
@@ -19,7 +62,7 @@ ADD_CUSTOM_TARGET(
                      -P ${CMAKE_MODULE_PATH}/version.cmake
     COMMENT "Generating version header"
 )
-add_dependencies(shogun version)
+add_dependencies(libshogun version)
 
 # generate source files from templates
 FOREACH(template ${LIBSHOGUN_SRC_TMP})
@@ -50,30 +93,35 @@ FOREACH(template ${LIBSHOGUN_SRC_TMP})
   ENDIF()
 
   ADD_CUSTOM_TARGET(${generated_target} DEPENDS ${generated_cpp})
-  add_dependencies(shogun ${generated_target})
+  add_dependencies(libshogun ${generated_target})
 ENDFOREACH()
 
-CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/lib/config.h.in ${CMAKE_CURRENT_SOURCE_DIR}/lib/config.h)
+# add target for dynamic
+add_library(shogun SHARED $<TARGET_OBJECTS:libshogun> lib/config.h)
 set_target_properties(shogun PROPERTIES
                       VERSION ${LIBSHOGUNVER}
-                      SOVERSION ${LIBSHOGUNSO}
-                      COMPILE_DEFINITIONS "${DEFINES}")
-IF (SANITIZER_FLAGS)
-  set_target_properties(shogun PROPERTIES COMPILE_FLAGS ${SANITIZER_FLAGS})
-ENDIF()
+                      SOVERSION ${LIBSHOGUNSO})
+
 target_link_libraries(shogun ${POSTLINKFLAGS})
 
 # add bundled libraries to dependency
 if(SHOGUN_DEPENDS)
-  add_dependencies(shogun ${SHOGUN_DEPENDS})
+  add_dependencies(libshogun ${SHOGUN_DEPENDS})
 endif()
+
+# add target for static library if enabled
+if (BUILD_STATIC)
+  add_library(shogun-static STATIC $<TARGET_OBJECTS:libshogun> lib/config.h)
+  set_target_properties(shogun-static PROPERTIES OUTPUT_NAME shogun)
+ENDIF()
+
+CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/lib/config.h.in ${CMAKE_CURRENT_SOURCE_DIR}/lib/config.h)
 
 INSTALL(DIRECTORY ./
         DESTINATION include/shogun
         COMPONENT headers
         FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
         PATTERN ".settings" EXCLUDE)
-SET(CPACK_COMPONENTS_ALL ${CPACK_COMPONENTS_ALL} headers)
 
 IF (LIB_INSTALL_DIR)
   SET(SHOGUN_LIB_INSTALL ${LIB_INSTALL_DIR})
@@ -85,21 +133,3 @@ INSTALL(TARGETS shogun
   ARCHIVE DESTINATION ${SHOGUN_LIB_INSTALL}
   LIBRARY DESTINATION ${SHOGUN_LIB_INSTALL}
   COMPONENT libraries)
-
-SET(CPACK_COMPONENTS_ALL ${CPACK_COMPONENTS_ALL} libraries PARENT_SCOPE)
-
-# cpack
-set(CPACK_COMPONENT_LIBRARIES_DISPLAY_NAME "Libraries" PARENT_SCOPE)
-set(CPACK_COMPONENT_LIBRARIES_DESCRIPTION "Shogun libraries" PARENT_SCOPE)
-set(CPACK_COMPONENT_LIBRARIES_GROUP "Runtime" PARENT_SCOPE)
-
-set(CPACK_COMPONENT_HEADERS_DISPLAY_NAME "C++ Headers" PARENT_SCOPE)
-set(CPACK_COMPONENT_HEADERS_DESCRIPTION "C/C++ header files for Shogun" PARENT_SCOPE)
-set(CPACK_COMPONENT_HEADERS_GROUP "Development" PARENT_SCOPE)
-
-set(CPACK_COMPONENT_GROUP_DEVELOPMENT_EXPANDED ON PARENT_SCOPE)
-set(CPACK_COMPONENT_GROUP_DEVELOPMENT_DESCRIPTION
-   "All of the packages that's required for developing with Shogun" PARENT_SCOPE)
-
-set(CPACK_COMPONENT_HEADERS_DEPENDS libraries PARENT_SCOPE)
-

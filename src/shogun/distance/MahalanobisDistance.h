@@ -11,6 +11,8 @@
 #ifndef _MAHALANOBISDISTANCE_H__
 #define _MAHALANOBISDISTANCE_H__
 
+#include <shogun/lib/config.h>
+
 #ifdef HAVE_LAPACK
 
 #include <shogun/lib/common.h>

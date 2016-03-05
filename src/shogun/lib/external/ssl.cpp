@@ -36,10 +36,10 @@ void ssl_train(struct data *Data,
 		struct vector_double *Outputs)
 {
 	// initialize
-	initialize(Weights,Data->n,0.0);
-	initialize(Outputs,Data->m,0.0);
+	initialize_ssl(Weights,Data->n,0.0);
+	initialize_ssl(Outputs,Data->m,0.0);
 	vector_int    *Subset  = SG_MALLOC(vector_int, 1);
-	initialize(Subset,Data->m);
+	initialize_ssl(Subset,Data->m);
 	// call the right algorithm
 	int32_t optimality = 0;
 	switch(Options->algo)
@@ -342,6 +342,12 @@ int32_t L2_SVM_MFN(
 		ActiveSubset->d=active;
 		if(CMath::abs(F-F_old)<RELATIVE_STOP_EPS*CMath::abs(F_old))
 		{
+			SG_FREE(ActiveSubset->vec);
+			SG_FREE(ActiveSubset);
+			SG_FREE(o_bar);
+			SG_FREE(w_bar);
+			SG_FREE(Weights_bar);
+			SG_FREE(Outputs_bar);
 			SG_SINFO("L2_SVM_MFN converged (rel. criterion) in %d iterations", iter)
 			return 2;
 		}
@@ -441,7 +447,7 @@ int32_t TSVM_MFN(
 	/* Setup labeled-only examples and train L2_SVM_MFN */
 	struct data *Data_Labeled = SG_MALLOC(data, 1);
 	struct vector_double *Outputs_Labeled = SG_MALLOC(vector_double, 1);
-	initialize(Outputs_Labeled,Data->l,0.0);
+	initialize_ssl(Outputs_Labeled,Data->l,0.0);
 	SG_SDEBUG("Initializing weights, unknown labels")
 	GetLabeledData(Data_Labeled,Data); /* gets labeled data and sets C=1/l */
 	L2_SVM_MFN(Data_Labeled, Options, Weights,Outputs_Labeled,0);
@@ -1074,7 +1080,7 @@ float64_t norm_square(const vector_double *A)
 	return x;
 }
 
-void initialize(struct vector_double *A, int32_t k, float64_t a)
+void initialize_ssl(struct vector_double *A, int32_t k, float64_t a)
 {
 	float64_t *vec = SG_MALLOC(float64_t, k);
 	for (int32_t i=0;i<k;i++)
@@ -1084,7 +1090,7 @@ void initialize(struct vector_double *A, int32_t k, float64_t a)
 	return;
 }
 
-void initialize(struct vector_int *A, int32_t k)
+void initialize_ssl(struct vector_int *A, int32_t k)
 {
 	int32_t *vec = SG_MALLOC(int32_t, k);
 	for(int32_t i=0;i<k;i++)

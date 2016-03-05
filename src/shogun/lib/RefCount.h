@@ -1,3 +1,5 @@
+#include <shogun/lib/config.h>
+
 #ifdef HAVE_CXX11_ATOMIC
 #include <atomic>
 #endif

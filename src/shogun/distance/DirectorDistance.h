@@ -10,7 +10,10 @@
 #ifndef _DIRECTORDISTANCE_H___
 #define _DIRECTORDISTANCE_H___
 
+#include <shogun/lib/config.h>
+
 #ifdef USE_SWIG_DIRECTORS
+
 #include <shogun/lib/common.h>
 #include <shogun/lib/DataType.h>
 #include <shogun/distance/Distance.h>
@@ -75,30 +78,6 @@ IGNORE_IN_CLASSLIST class CDirectorDistance : public CDistance
 		virtual float64_t distance_upper_bounded(int32_t idx_a, int32_t idx_b, float64_t upper_bound)
 		{
 			return CDistance::distance(idx_a, idx_b);
-		}
-
-		/** get distance matrix real
-		 *
-		 * @param m dimension m
-		 * @param n dimension n
-		 * @param target target matrix
-		 * @return target matrix
-		 */
-		virtual float64_t* get_distance_matrix_real(int32_t &m, int32_t &n, float64_t* target)
-		{
-			return CDistance::get_distance_matrix_real(m, n, target);
-		}
-
-		/** get distance matrix short real
-		 *
-		 * @param m dimension m
-		 * @param n dimension n
-		 * @param target target matrix
-		 * @return target matrix
-		 */
-		virtual float32_t* get_distance_matrix_shortreal(int32_t &m, int32_t &n, float32_t* target)
-		{
-			return CDistance::get_distance_matrix_shortreal(m, n, target);
 		}
 
 		/** init distance

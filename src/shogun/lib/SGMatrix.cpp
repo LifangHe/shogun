@@ -18,7 +18,11 @@
 #include <shogun/lib/SGVector.h>
 #include <shogun/mathematics/Math.h>
 #include <shogun/mathematics/lapack.h>
-#include <shogun/lib/SGMatrixList.h>
+#include <limits>
+
+#ifdef HAVE_EIGEN3
+#include <shogun/mathematics/eigen3.h>
+#endif
 
 namespace shogun {
 
@@ -47,10 +51,50 @@ SGMatrix<T>::SGMatrix(index_t nrows, index_t ncols, bool ref_counting)
 }
 
 template <class T>
+SGMatrix<T>::SGMatrix(SGVector<T> vec) : SGReferencedData(vec)
+{
+	REQUIRE(vec.vector, "Vector not initialized!\n");
+	matrix=vec.vector;
+	num_rows=vec.vlen;
+	num_cols=1;
+}
+
+template <class T>
+SGMatrix<T>::SGMatrix(SGVector<T> vec, index_t nrows, index_t ncols)
+: SGReferencedData(vec)
+{
+	REQUIRE(vec.vector, "Vector not initialized!\n");
+	REQUIRE(nrows>0, "Number of rows (%d) has to be a positive integer!\n", nrows);
+	REQUIRE(ncols>0, "Number of cols (%d) has to be a positive integer!\n", ncols);
+	REQUIRE(vec.vlen==nrows*ncols, "Number of elements in the matrix (%d) must "
+			"be the same as the number of elements in the vector (%d)!\n",
+			nrows*ncols, vec.vlen);
+	matrix=vec.vector;
+	num_rows=nrows;
+	num_cols=ncols;
+}
+
+template <class T>
 SGMatrix<T>::SGMatrix(const SGMatrix &orig) : SGReferencedData(orig)
 {
 	copy_data(orig);
 }
+
+#ifdef HAVE_EIGEN3
+template <class T>
+SGMatrix<T>::SGMatrix(EigenMatrixXt& mat)
+: SGReferencedData(false), matrix(mat.data()),
+	num_rows(mat.rows()), num_cols(mat.cols())
+{
+
+}
+
+template <class T>
+SGMatrix<T>::operator EigenMatrixXtMap() const
+{
+	return EigenMatrixXtMap(matrix, num_rows, num_cols);
+}
+#endif
 
 template <class T>
 SGMatrix<T>::~SGMatrix()
@@ -76,7 +120,7 @@ bool SGMatrix<T>::equals(SGMatrix<T>& other)
 	if (num_rows!=other.num_rows || num_cols!=other.num_cols)
 		return false;
 
-	for (index_t i=0; i<num_rows*num_cols; ++i)
+	for (int64_t i=0; i<int64_t(num_rows)*num_cols; ++i)
 	{
 		if (matrix[i]!=other.matrix[i])
 			return false;
@@ -88,29 +132,115 @@ bool SGMatrix<T>::equals(SGMatrix<T>& other)
 template <class T>
 void SGMatrix<T>::set_const(T const_elem)
 {
-	for (index_t i=0; i<num_rows*num_cols; i++)
+	for (int64_t i=0; i<int64_t(num_rows)*num_cols; i++)
 		matrix[i]=const_elem ;
 }
 
 template <class T>
 void SGMatrix<T>::zero()
 {
-	if (matrix && (num_rows*num_cols))
+	if (matrix && (int64_t(num_rows)*num_cols))
 		set_const(0);
 }
 
 template <>
 void SGMatrix<complex128_t>::zero()
 {
-	if (matrix && (num_rows*num_cols))
+	if (matrix && (int64_t(num_rows)*num_cols))
 		set_const(complex128_t(0.0));
+}
+
+template <class T>
+bool SGMatrix<T>::is_symmetric()
+{
+	if (num_rows!=num_cols)
+		return false;
+	for (int i=0; i<num_rows; ++i)
+	{
+		for (int j=i+1; j<num_cols; ++j)
+		{
+			if (matrix[j*num_rows+i]!=matrix[i*num_rows+j])
+				return false;
+		}
+	}
+	return true;
+}
+
+template <>
+bool SGMatrix<float32_t>::is_symmetric()
+{
+	if (num_rows!=num_cols)
+		return false;
+	for (int i=0; i<num_rows; ++i)
+	{
+		for (int j=i+1; j<num_cols; ++j)
+		{
+			if (!CMath::fequals<float32_t>(matrix[j*num_rows+i],
+						matrix[i*num_rows+j], FLT_EPSILON))
+				return false;
+		}
+	}
+	return true;
+}
+
+template <>
+bool SGMatrix<float64_t>::is_symmetric()
+{
+	if (num_rows!=num_cols)
+		return false;
+	for (int i=0; i<num_rows; ++i)
+	{
+		for (int j=i+1; j<num_cols; ++j)
+		{
+			if (!CMath::fequals<float64_t>(matrix[j*num_rows+i],
+						matrix[i*num_rows+j], DBL_EPSILON))
+				return false;
+		}
+	}
+	return true;
+}
+
+template <>
+bool SGMatrix<floatmax_t>::is_symmetric()
+{
+	if (num_rows!=num_cols)
+		return false;
+	for (int i=0; i<num_rows; ++i)
+	{
+		for (int j=i+1; j<num_cols; ++j)
+		{
+			if (!CMath::fequals<floatmax_t>(matrix[j*num_rows+i],
+						matrix[i*num_rows+j], LDBL_EPSILON))
+				return false;
+		}
+	}
+	return true;
+}
+
+template <>
+bool SGMatrix<complex128_t>::is_symmetric()
+{
+	if (num_rows!=num_cols)
+		return false;
+	for (int i=0; i<num_rows; ++i)
+	{
+		for (int j=i+1; j<num_cols; ++j)
+		{
+			if (!(CMath::fequals<float64_t>(matrix[j*num_rows+i].real(),
+						matrix[i*num_rows+j].real(), DBL_EPSILON) &&
+					CMath::fequals<float64_t>(matrix[j*num_rows+i].imag(),
+						matrix[i*num_rows+j].imag(), DBL_EPSILON)))
+				return false;
+		}
+	}
+	return true;
 }
 
 template <class T>
 T SGMatrix<T>::max_single()
 {
 	T max=matrix[0];
-	for (index_t i=1; i<num_rows*num_cols; ++i)
+	for (int64_t i=1; i<int64_t(num_rows)*num_cols; ++i)
 	{
 		if (matrix[i]>max)
 			max=matrix[i];
@@ -148,10 +278,10 @@ void SGMatrix<T>::transpose_matrix(
 	T*& matrix, int32_t& num_feat, int32_t& num_vec)
 {
 	/* this should be done in-place! Heiko */
-	T* transposed=SG_MALLOC(T, num_vec*num_feat);
-	for (int32_t i=0; i<num_vec; i++)
+	T* transposed=SG_MALLOC(T, int64_t(num_vec)*num_feat);
+	for (int64_t i=0; i<num_vec; i++)
 	{
-		for (int32_t j=0; j<num_feat; j++)
+		for (int64_t j=0; j<num_feat; j++)
 			transposed[i+j*num_vec]=matrix[i*num_feat+j];
 	}
 
@@ -164,9 +294,9 @@ void SGMatrix<T>::transpose_matrix(
 template <class T>
 void SGMatrix<T>::create_diagonal_matrix(T* matrix, T* v,int32_t size)
 {
-	for(int32_t i=0;i<size;i++)
+	for(int64_t i=0;i<size;i++)
 	{
-		for(int32_t j=0;j<size;j++)
+		for(int64_t j=0;j<size;j++)
 		{
 			if(i==j)
 				matrix[j*size+i]=v[i];
@@ -181,7 +311,7 @@ float64_t SGMatrix<T>::trace(
 	float64_t* mat, int32_t cols, int32_t rows)
 {
 	float64_t trace=0;
-	for (int32_t i=0; i<rows; i++)
+	for (int64_t i=0; i<rows; i++)
 		trace+=mat[i*cols+i];
 	return trace;
 }
@@ -191,10 +321,10 @@ T* SGMatrix<T>::get_row_sum(T* matrix, int32_t m, int32_t n)
 {
 	T* rowsums=SG_CALLOC(T, n);
 
-	for (int32_t i=0; i<n; i++)
+	for (int64_t i=0; i<n; i++)
 	{
-		for (int32_t j=0; j<m; j++)
-			rowsums[i]+=matrix[j+int64_t(i)*m];
+		for (int64_t j=0; j<m; j++)
+			rowsums[i]+=matrix[j+i*m];
 	}
 	return rowsums;
 }
@@ -204,10 +334,10 @@ T* SGMatrix<T>::get_column_sum(T* matrix, int32_t m, int32_t n)
 {
 	T* colsums=SG_CALLOC(T, m);
 
-	for (int32_t i=0; i<n; i++)
+	for (int64_t i=0; i<n; i++)
 	{
-		for (int32_t j=0; j<m; j++)
-			colsums[j]+=matrix[j+int64_t(i)*m];
+		for (int64_t j=0; j<m; j++)
+			colsums[j]+=matrix[j+i*m];
 	}
 	return colsums;
 }
@@ -233,10 +363,10 @@ void SGMatrix<T>::center_matrix(T* matrix, int32_t m, int32_t n)
 
 	T s=SGVector<T>::sum(rowsums, n)/num_data;
 
-	for (int32_t i=0; i<n; i++)
+	for (int64_t i=0; i<n; i++)
 	{
-		for (int32_t j=0; j<m; j++)
-			matrix[int64_t(i)*m+j]+=s-colsums[j]-rowsums[i];
+		for (int64_t j=0; j<m; j++)
+			matrix[i*m+j]+=s-colsums[j]-rowsums[i];
 	}
 
 	SG_FREE(rowsums);
@@ -251,10 +381,10 @@ void SGMatrix<T>::remove_column_mean()
 	T* means=get_row_sum(matrix, num_rows, num_cols);
 
 	/* substract column mean from every corresponding entry */
-	for (index_t i=0; i<num_cols; ++i)
+	for (int64_t i=0; i<num_cols; ++i)
 	{
 		means[i]/=num_rows;
-		for (index_t j=0; j<num_rows; ++j)
+		for (int64_t j=0; j<num_rows; ++j)
 			matrix[i*num_rows+j]-=means[i];
 	}
 
@@ -281,10 +411,10 @@ void SGMatrix<bool>::display_matrix(
 {
 	ASSERT(rows>=0 && cols>=0)
 	SG_SPRINT("%s%s=[\n", prefix, name)
-	for (int32_t i=0; i<rows; i++)
+	for (int64_t i=0; i<rows; i++)
 	{
 		SG_SPRINT("%s[", prefix)
-		for (int32_t j=0; j<cols; j++)
+		for (int64_t j=0; j<cols; j++)
 			SG_SPRINT("%s\t%d%s", prefix, matrix[j*rows+i] ? 1 : 0,
 				j==cols-1? "" : ",");
 		SG_SPRINT("%s]%s\n", prefix, i==rows-1? "" : ",")
@@ -299,10 +429,10 @@ void SGMatrix<char>::display_matrix(
 {
 	ASSERT(rows>=0 && cols>=0)
 	SG_SPRINT("%s%s=[\n", prefix, name)
-	for (int32_t i=0; i<rows; i++)
+	for (int64_t i=0; i<rows; i++)
 	{
 		SG_SPRINT("%s[", prefix)
-		for (int32_t j=0; j<cols; j++)
+		for (int64_t j=0; j<cols; j++)
 			SG_SPRINT("%s\t%c%s", prefix, matrix[j*rows+i],
 				j==cols-1? "" : ",");
 		SG_SPRINT("%s]%s\n", prefix, i==rows-1? "" : ",")
@@ -317,10 +447,10 @@ void SGMatrix<int8_t>::display_matrix(
 {
 	ASSERT(rows>=0 && cols>=0)
 	SG_SPRINT("%s%s=[\n", prefix, name)
-	for (int32_t i=0; i<rows; i++)
+	for (int64_t i=0; i<rows; i++)
 	{
 		SG_SPRINT("%s[", prefix)
-		for (int32_t j=0; j<cols; j++)
+		for (int64_t j=0; j<cols; j++)
 			SG_SPRINT("%s\t%d%s", prefix, matrix[j*rows+i],
 				j==cols-1? "" : ",");
 		SG_SPRINT("%s]%s\n", prefix, i==rows-1? "" : ",")
@@ -335,10 +465,10 @@ void SGMatrix<uint8_t>::display_matrix(
 {
 	ASSERT(rows>=0 && cols>=0)
 	SG_SPRINT("%s%s=[\n", prefix, name)
-	for (int32_t i=0; i<rows; i++)
+	for (int64_t i=0; i<rows; i++)
 	{
 		SG_SPRINT("%s[", prefix)
-		for (int32_t j=0; j<cols; j++)
+		for (int64_t j=0; j<cols; j++)
 			SG_SPRINT("%s\t%d%s", prefix, matrix[j*rows+i],
 				j==cols-1? "" : ",");
 		SG_SPRINT("%s]%s\n", prefix, i==rows-1? "" : ",")
@@ -353,10 +483,10 @@ void SGMatrix<int16_t>::display_matrix(
 {
 	ASSERT(rows>=0 && cols>=0)
 	SG_SPRINT("%s%s=[\n", prefix, name)
-	for (int32_t i=0; i<rows; i++)
+	for (int64_t i=0; i<rows; i++)
 	{
 		SG_SPRINT("%s[", prefix)
-		for (int32_t j=0; j<cols; j++)
+		for (int64_t j=0; j<cols; j++)
 			SG_SPRINT("%s\t%d%s", prefix, matrix[j*rows+i],
 				j==cols-1? "" : ",");
 		SG_SPRINT("%s]%s\n", prefix, i==rows-1? "" : ",")
@@ -371,10 +501,10 @@ void SGMatrix<uint16_t>::display_matrix(
 {
 	ASSERT(rows>=0 && cols>=0)
 	SG_SPRINT("%s%s=[\n", prefix, name)
-	for (int32_t i=0; i<rows; i++)
+	for (int64_t i=0; i<rows; i++)
 	{
 		SG_SPRINT("%s[", prefix)
-		for (int32_t j=0; j<cols; j++)
+		for (int64_t j=0; j<cols; j++)
 			SG_SPRINT("%s\t%d%s", prefix, matrix[j*rows+i],
 				j==cols-1? "" : ",");
 		SG_SPRINT("%s]%s\n", prefix, i==rows-1? "" : ",")
@@ -390,10 +520,10 @@ void SGMatrix<int32_t>::display_matrix(
 {
 	ASSERT(rows>=0 && cols>=0)
 	SG_SPRINT("%s%s=[\n", prefix, name)
-	for (int32_t i=0; i<rows; i++)
+	for (int64_t i=0; i<rows; i++)
 	{
 		SG_SPRINT("%s[", prefix)
-		for (int32_t j=0; j<cols; j++)
+		for (int64_t j=0; j<cols; j++)
 			SG_SPRINT("%s\t%d%s", prefix, matrix[j*rows+i],
 				j==cols-1? "" : ",");
 		SG_SPRINT("%s]%s\n", prefix, i==rows-1? "" : ",")
@@ -408,10 +538,10 @@ void SGMatrix<uint32_t>::display_matrix(
 {
 	ASSERT(rows>=0 && cols>=0)
 	SG_SPRINT("%s%s=[\n", prefix, name)
-	for (int32_t i=0; i<rows; i++)
+	for (int64_t i=0; i<rows; i++)
 	{
 		SG_SPRINT("%s[", prefix)
-		for (int32_t j=0; j<cols; j++)
+		for (int64_t j=0; j<cols; j++)
 			SG_SPRINT("%s\t%d%s", prefix, matrix[j*rows+i],
 				j==cols-1? "" : ",");
 		SG_SPRINT("%s]%s\n", prefix, i==rows-1? "" : ",")
@@ -425,10 +555,10 @@ void SGMatrix<int64_t>::display_matrix(
 {
 	ASSERT(rows>=0 && cols>=0)
 	SG_SPRINT("%s%s=[\n", prefix, name)
-	for (int32_t i=0; i<rows; i++)
+	for (int64_t i=0; i<rows; i++)
 	{
 		SG_SPRINT("%s[", prefix)
-		for (int32_t j=0; j<cols; j++)
+		for (int64_t j=0; j<cols; j++)
 			SG_SPRINT("%s\t%d%s", prefix, matrix[j*rows+i],
 				j==cols-1? "" : ",");
 		SG_SPRINT("%s]%s\n", prefix, i==rows-1? "" : ",")
@@ -443,10 +573,10 @@ void SGMatrix<uint64_t>::display_matrix(
 {
 	ASSERT(rows>=0 && cols>=0)
 	SG_SPRINT("%s%s=[\n", prefix, name)
-	for (int32_t i=0; i<rows; i++)
+	for (int64_t i=0; i<rows; i++)
 	{
 		SG_SPRINT("%s[", prefix)
-		for (int32_t j=0; j<cols; j++)
+		for (int64_t j=0; j<cols; j++)
 			SG_SPRINT("%s\t%d%s", prefix, matrix[j*rows+i],
 				j==cols-1? "" : ",");
 		SG_SPRINT("%s]%s\n", prefix, i==rows-1? "" : ",")
@@ -461,10 +591,10 @@ void SGMatrix<float32_t>::display_matrix(
 {
 	ASSERT(rows>=0 && cols>=0)
 	SG_SPRINT("%s%s=[\n", prefix, name)
-	for (int32_t i=0; i<rows; i++)
+	for (int64_t i=0; i<rows; i++)
 	{
 		SG_SPRINT("%s[", prefix)
-		for (int32_t j=0; j<cols; j++)
+		for (int64_t j=0; j<cols; j++)
 			SG_SPRINT("%s\t%.18g%s", prefix, (float) matrix[j*rows+i],
 				j==cols-1? "" : ",");
 		SG_SPRINT("%s]%s\n", prefix, i==rows-1? "" : ",")
@@ -479,10 +609,10 @@ void SGMatrix<float64_t>::display_matrix(
 {
 	ASSERT(rows>=0 && cols>=0)
 	SG_SPRINT("%s%s=[\n", prefix, name)
-	for (int32_t i=0; i<rows; i++)
+	for (int64_t i=0; i<rows; i++)
 	{
 		SG_SPRINT("%s[", prefix)
-		for (int32_t j=0; j<cols; j++)
+		for (int64_t j=0; j<cols; j++)
 			SG_SPRINT("%s\t%.18g%s", prefix, (double) matrix[j*rows+i],
 				j==cols-1? "" : ",");
 		SG_SPRINT("%s]%s\n", prefix, i==rows-1? "" : ",")
@@ -497,10 +627,10 @@ void SGMatrix<floatmax_t>::display_matrix(
 {
 	ASSERT(rows>=0 && cols>=0)
 	SG_SPRINT("%s%s=[\n", prefix, name)
-	for (int32_t i=0; i<rows; i++)
+	for (int64_t i=0; i<rows; i++)
 	{
 		SG_SPRINT("%s[", prefix)
-		for (int32_t j=0; j<cols; j++)
+		for (int64_t j=0; j<cols; j++)
 			SG_SPRINT("%s\t%.18g%s", prefix, (double) matrix[j*rows+i],
 				j==cols-1? "" : ",");
 		SG_SPRINT("%s]%s\n", prefix, i==rows-1? "" : ",")
@@ -515,10 +645,10 @@ void SGMatrix<complex128_t>::display_matrix(
 {
 	ASSERT(rows>=0 && cols>=0)
 	SG_SPRINT("%s%s=[\n", prefix, name)
-	for (int32_t i=0; i<rows; i++)
+	for (int64_t i=0; i<rows; i++)
 	{
 		SG_SPRINT("%s[", prefix)
-		for (int32_t j=0; j<cols; j++)
+		for (int64_t j=0; j<cols; j++)
 			SG_SPRINT("%s\t(%.18g+i%.18g)%s", prefix, matrix[j*rows+i].real(),
 				matrix[j*rows+i].imag(), j==cols-1? "" : ",");
 		SG_SPRINT("%s]%s\n", prefix, i==rows-1? "" : ",")
@@ -702,22 +832,6 @@ SGMatrix<complex128_t> SGMatrix<complex128_t>::create_identity_matrix(index_t si
 	return I;
 }
 
-
-template <class T>
-SGMatrix<float64_t> SGMatrix<T>::create_centering_matrix(index_t size)
-{
-	SGMatrix<float64_t> H=SGMatrix<float64_t>::create_identity_matrix(size, 1.0);
-
-	float64_t subtract=1.0/size;
-	for (index_t i=0; i<size; ++i)
-	{
-		for (index_t j=0; j<0; ++j)
-			H(i,j)-=subtract;
-	}
-
-	return H;
-}
-
 //Howto construct the pseudo inverse (from "The Matrix Cookbook")
 //
 //Assume A does not have full rank, i.e. A is n \times m and rank(A) = r < min(n;m).
@@ -751,9 +865,9 @@ float64_t* SGMatrix<T>::pinv(
 	wrap_dgesvd(jobu, jobvt, m, n, matrix, lda, s, u, ldu, vt, ldvt, &info);
 	ASSERT(info==0)
 
-	for (int32_t i=0; i<n; i++)
+	for (int64_t i=0; i<n; i++)
 	{
-		for (int32_t j=0; j<lsize; j++)
+		for (int64_t j=0; j<lsize; j++)
 			vt[i*n+j]=vt[i*n+j]/s[j];
 	}
 
@@ -780,7 +894,7 @@ void SGMatrix<T>::inverse(SGMatrix<float64_t> matrix)
 template <class T>
 SGVector<float64_t> SGMatrix<T>::compute_eigenvectors(SGMatrix<float64_t> matrix)
 {
-	if (matrix.num_rows!=matrix.num_rows)
+	if (matrix.num_rows!=matrix.num_cols)
 	{
 		SG_SERROR("SGMatrix::compute_eigenvectors(SGMatrix<float64_t>): matrix"
 				" rows and columns are not equal!\n");
@@ -859,12 +973,19 @@ SGMatrix<float64_t> SGMatrix<T>::matrix_multiply(
 			A.matrix, A.num_rows, B.matrix, B.num_rows,
 			0.0, C.matrix, C.num_rows);
 #else
+	/* C(i,j) = scale * \Sigma A(i,k)*B(k,j) */
 	for (int32_t i=0; i<rows_A; i++)
 	{
 		for (int32_t j=0; j<cols_B; j++)
 		{
 			for (int32_t k=0; k<cols_A; k++)
-				C(i,j) += A(i,k)*B(k,j);
+			{
+				float64_t x1=transpose_A ? A(k,i):A(i,k);
+				float64_t x2=transpose_B ? B(j,k):B(k,j);
+				C(i,j)+=x1*x2;
+			}
+
+			C(i,j)*=scale;
 		}
 	}
 #endif //HAVE_LAPACK
@@ -967,7 +1088,7 @@ template<class T>
 SGVector<T> SGMatrix<T>::get_row_vector(index_t row) const
 {
 	SGVector<T> rowv(num_cols);
-	for (index_t i = 0; i < num_cols; i++)
+	for (int64_t i = 0; i < num_cols; i++)
 	{
 		rowv[i] = matrix[i*num_rows+row];
 	}
@@ -980,7 +1101,7 @@ SGVector<T> SGMatrix<T>::get_diagonal_vector() const
 	index_t diag_vlen=CMath::min(num_cols, num_rows);
 	SGVector<T> diag(diag_vlen);
 
-	for (index_t i=0; i<diag_vlen; i++)
+	for (int64_t i=0; i<diag_vlen; i++)
 	{
 		diag[i]=matrix[i*num_rows+i];
 	}

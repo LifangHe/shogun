@@ -10,10 +10,8 @@
 
 #include <shogun/structure/CCSOSVM.h>
 #include <shogun/mathematics/Mosek.h>
-
-#ifdef USE_MOSEK
-#include <mosek.h>
-#endif
+#include <shogun/lib/SGSparseVector.h>
+#include <shogun/mathematics/Math.h>
 
 using namespace shogun;
 
@@ -41,7 +39,9 @@ CCCSOSVM::CCCSOSVM(CStructuredModel* model, SGVector<float64_t> w)
 
 CCCSOSVM::~CCCSOSVM()
 {
-
+#ifdef USE_MOSEK
+	MSK_deleteenv(&m_msk_env);
+#endif
 }
 
 int32_t CCCSOSVM::mosek_qp_optimize(float64_t** G, float64_t* delta, float64_t* alpha, int32_t k, float64_t* dual_obj, float64_t rho)
@@ -63,7 +63,6 @@ int32_t CCCSOSVM::mosek_qp_optimize(float64_t** G, float64_t* delta, float64_t* 
 	MSKidxt *qsubi,*qsubj;
 	SGVector<float64_t> qval(Q_size);
 
-	MSKenv_t env;
 	MSKtask_t task;
 	MSKrescodee r;
 
@@ -77,20 +76,19 @@ int32_t CCCSOSVM::mosek_qp_optimize(float64_t** G, float64_t* delta, float64_t* 
 
 	/* DEBUG */
 	/*
-		 for (int32_t i=0;i<k;i++) {
+	 for (int32_t i=0;i<k;i++)
 		 printf("delta: %.4f\n", delta[i]);
-		 }
-		 printf("G:\n");
-		 for (int32_t i=0;i<k;i++) {
-		 for (int32_t j=0;j<k;j++) {
-		 printf("%.4f ", G[i][j]);
-		 }
-		 printf("\n");
-		 }
-		 fflush(stdout);
-		 */
-	/* DEBUG */
 
+	 printf("G:\n");
+	 for (int32_t i=0;i<k;i++)
+	 {
+		 for (int32_t j=0;j<k;j++)
+		 	printf("%.4f ", G[i][j]);
+		 printf("\n");
+	 }
+	 fflush(stdout);
+	*/
+	/* DEBUG */
 
 	for (int32_t i=0; i < k;i++)
 	{
@@ -106,102 +104,84 @@ int32_t CCCSOSVM::mosek_qp_optimize(float64_t** G, float64_t* delta, float64_t* 
 	bkc[0] = MSK_BK_FX;
 	blc[0] = m_C;
 	buc[0] = m_C;
+	/*
+	bkc[0] = MSK_BK_UP;
+	blc[0] = -MSK_INFINITY;
+	buc[0] = m_C;
+	*/
 
-	/* create mosek environment */
-#if (MSK_VERSION_MAJOR == 6)
-	r = MSK_makeenv(&env, NULL, NULL, NULL, NULL);
-#elif (MSK_VERSION_MAJOR == 7)
-	r = MSK_makeenv(&env, NULL);
-#else
-	#error "Unsupported Mosek version"
-#endif
+	/* create the optimization task */
+	r = MSK_maketask(m_msk_env, 1, k, &task);
 
-	/* check return code */
-	if (r==MSK_RES_OK)
+	if (r != MSK_RES_OK)
+		SG_ERROR("Could not create MOSEK task: %d\n", r)
+
+	r = MSK_inputdata(task,
+			1,k,
+			1,k,
+			c,0.0,
+			aptrb,aptre,
+			asub,aval,
+			bkc,blc,buc,
+			bkx,blx,bux);
+
+	if (r != MSK_RES_OK)
+		SG_ERROR("Error setting input data: %d\n", r)
+
+	/* coefficients for the Gram matrix */
+	t = 0;
+	for (int32_t i=0;i<k;i++)
 	{
-		/* directs output to printstr function */
-		//		MSK_linkfunctoenvstream(env, MSK_STREAM_LOG, NULL, CMosek::print);
-	}
-
-	/* initialize the environment */
-	r = MSK_initenv(env);
-
-	if (r==MSK_RES_OK)
-	{
-		/* create the optimization task */
-		r = MSK_maketask(env,1,k,&task);
-
-		if (r==MSK_RES_OK)
+		for (int32_t j=0;j<=i;j++)
 		{
-			//		r = MSK_linkfunctotaskstream(task, MSK_STREAM_LOG, NULL, CMosek::print);
-
-			if (r==MSK_RES_OK)
-			{
-				r = MSK_inputdata(task,
-						1,k,
-						1,k,
-						c,0.0,
-						aptrb,aptre,
-						asub,aval,
-						bkc,blc,buc,
-						bkx,blx,bux);
-
-			}
-
-			if (r==MSK_RES_OK) {
-				/* coefficients for the Gram matrix */
-				t = 0;
-				for (int32_t i=0;i<k;i++) {
-					for (int32_t j=0;j<=i;j++) {
-						qsubi[t] = i;
-						qsubj[t] = j;
-						qval[t] = G[i][j]/(1+rho);
-						t++;
-					}
-				}
-
-				r = MSK_putqobj(task, k*(k+1)/2, qsubi,qsubj,qval);
-			}
-
-			/* DEBUG */
-			/*
-				 printf("t: %ld\n", t);
-				 for (int32_t i=0;i<t;i++) {
-				 printf("qsubi: %d, qsubj: %d, qval: %.4f\n", qsubi[i], qsubj[i], qval[i]);
-				 }
-				 fflush(stdout);
-				 */
-			/* DEBUG */
-
-			/* set relative tolerance gap (DEFAULT = 1E-8)*/
-			MSK_putdouparam(task, MSK_DPAR_INTPNT_TOL_REL_GAP, 1E-14);
-
-			if (r==MSK_RES_OK) {
-				r = MSK_optimize(task);
-			}
-
-			if (r==MSK_RES_OK) {
-				MSK_getsolutionslice(task,
-						MSK_SOL_ITR,
-						MSK_SOL_ITEM_XX,
-						0,
-						k,
-						alpha);
-				/* output the objective value */
-				MSK_getprimalobj(task, MSK_SOL_ITR, dual_obj);
-			}
-			MSK_deletetask(&task);
+			qsubi[t] = i;
+			qsubj[t] = j;
+			qval[t] = G[i][j]/(1+rho);
+			t++;
 		}
-		MSK_deleteenv(&env);
 	}
+
+	r = MSK_putqobj(task, k*(k+1)/2, qsubi, qsubj, qval);
+	if (r != MSK_RES_OK)
+		SG_ERROR("Error MSK_putqobj: %d\n", r)
+
+	/* DEBUG */
+	/*
+	 printf("t: %ld\n", t);
+	 for (int32_t i=0;i<t;i++) {
+	 printf("qsubi: %d, qsubj: %d, qval: %.4f\n", qsubi[i], qsubj[i], qval[i]);
+	 }
+	 fflush(stdout);
+	 */
+	/* DEBUG */
+
+	/* set relative tolerance gap (DEFAULT = 1E-8)*/
+	MSK_putdouparam(task, MSK_DPAR_INTPNT_TOL_REL_GAP, 1E-8);
+
+	r = MSK_optimize(task);
+
+	if (r != MSK_RES_OK)
+		SG_ERROR("Error MSK_optimize: %d\n", r)
+
+	MSK_getsolutionslice(task,
+			MSK_SOL_ITR,
+			MSK_SOL_ITEM_XX,
+			0,
+			k,
+			alpha);
+
+	/* output the objective value */
+	MSK_getprimalobj(task, MSK_SOL_ITR, dual_obj);
+
+	MSK_deletetask(&task);
 
 	/* free the memory */
-	free(aptrb);
-	free(aptre);
-	free(asub);
-	free(bkx);
-	free(qsubi);
-	free(qsubj);
+	SG_FREE(aptrb);
+	SG_FREE(aptre);
+	SG_FREE(asub);
+	SG_FREE(bkx);
+	SG_FREE(qsubi);
+	SG_FREE(qsubj);
 
 	return r;
 #else
@@ -264,17 +244,17 @@ bool CCCSOSVM::train_machine(CFeatures* data)
 	new_constraint = find_cutting_plane(&margin);
 	value = margin - new_constraint.dense_dot(1.0, m_w.vector, m_w.vlen, 0);
 
-	primal_obj_b = primal_obj = 0.5*m_w.dot(m_w.vector, m_w.vector, m_w.vlen)+m_C*value;
+	primal_obj_b = primal_obj = 0.5*CMath::dot(m_w.vector, m_w.vector, m_w.vlen)+m_C*value;
 	primal_lower_bound = 0;
 	expected_descent = -primal_obj_b;
 	initial_primal_obj = primal_obj_b;
 
 	SG_INFO("Running CCCP inner loop solver: ")
 
-	while ((!suff_decrease_cond)&&(expected_descent<-m_eps)&&(iter<m_max_iter))
+	while ((!suff_decrease_cond) && (expected_descent<-m_eps) && (iter<m_max_iter))
 	{
-		iter+=1;
-		size_active+=1;
+		++iter;
+		++size_active;
 
 		SG_DEBUG("ITER %d\n", iter)
 		SG_PRINT(".")
@@ -301,8 +281,8 @@ bool CCCSOSVM::train_machine(CFeatures* data)
 		cut_error.resize_vector(size_active);
 		// note g_i = - new_constraint
 		cut_error[size_active-1] = m_C*(new_constraint.dense_dot(1.0, w_b.vector, w_b.vlen, 0) - new_constraint.dense_dot(1.0, m_w.vector, m_w.vlen, 0));
-		cut_error[size_active-1] += (primal_obj_b - 0.5*w_b.dot(w_b.vector, w_b.vector, w_b.vlen));
-		cut_error[size_active-1] -= (primal_obj - 0.5*m_w.dot(m_w.vector, m_w.vector, m_w.vlen));
+		cut_error[size_active-1] += (primal_obj_b - 0.5*CMath::dot(w_b.vector, w_b.vector, w_b.vlen));
+		cut_error[size_active-1] -= (primal_obj - 0.5*CMath::dot(m_w.vector, m_w.vector, m_w.vlen));
 
 		gammaG0.resize_vector(size_active);
 
@@ -399,12 +379,12 @@ bool CCCSOSVM::train_machine(CFeatures* data)
 		if (m_qp_type == SVMLIGHT)
 		{
 			/* compute dual obj */
-			dual_obj = +0.5*(1+rho)*m_w.dot(m_w.vector, m_w.vector, m_w.vlen);
+			dual_obj = +0.5*(1+rho)*CMath::dot(m_w.vector, m_w.vector, m_w.vlen);
 			for (int32_t j=0;j<size_active;j++)
 				dual_obj -= proximal_rhs[j]/(1+rho)*alpha[j];
 		}
 
-		z_k_norm = CMath::sqrt(m_w.dot(m_w.vector, m_w.vector, m_w.vlen));
+		z_k_norm = CMath::sqrt(CMath::dot(m_w.vector, m_w.vector, m_w.vlen));
 		m_w.vec1_plus_scalar_times_vec2(m_w.vector, rho/(1+rho), w_b.vector, w_b.vlen);
 
 		/* detect if step size too small */
@@ -438,11 +418,11 @@ bool CCCSOSVM::train_machine(CFeatures* data)
 		value = margin - new_constraint.dense_dot(1.0, m_w.vector, m_w.vlen, 0);
 
 		/* print primal objective */
-		primal_obj = 0.5*m_w.dot(m_w.vector, m_w.vector, m_w.vlen)+m_C*value;
+		primal_obj = 0.5*CMath::dot(m_w.vector, m_w.vector, m_w.vlen)+m_C*value;
 
 		SG_DEBUG("ITER PRIMAL_OBJ %.4f\n", primal_obj)
 
-		temp_var = w_b.dot(w_b.vector, w_b.vector, w_b.vlen);
+		temp_var = CMath::dot(w_b.vector, w_b.vector, w_b.vlen);
 		proximal_term = 0.0;
 		for (index_t i=0; i < m_model->get_dim(); i++)
 			proximal_term += (m_w[i]-w_b[i])*(m_w[i]-w_b[i]);
@@ -476,9 +456,9 @@ bool CCCSOSVM::train_machine(CFeatures* data)
 				/* update cut_error */
 				for (index_t i = 0; i < size_active; i++)
 				{
-					cut_error[i] -= (primal_obj_b - 0.5*w_b.dot(w_b.vector, w_b.vector, w_b.vlen));
+					cut_error[i] -= (primal_obj_b - 0.5*CMath::dot(w_b.vector, w_b.vector, w_b.vlen));
 					cut_error[i] -= m_C*dXc[i].dense_dot(1.0, w_b.vector, w_b.vlen, 0);
-					cut_error[i] += (primal_obj - 0.5*m_w.dot(m_w, m_w, m_w.vlen));
+					cut_error[i] += (primal_obj - 0.5*CMath::dot(m_w, m_w, m_w.vlen));
 					cut_error[i] += m_C*dXc[i].dense_dot(1.0, m_w.vector, m_w.vlen, 0);
 				}
 				primal_obj_b = primal_obj;
@@ -531,8 +511,8 @@ bool CCCSOSVM::train_machine(CFeatures* data)
 	SG_INFO(" Inner loop optimization finished.\n")
 
 	for (index_t j = 0; j < size_active; j++)
-		free(G[j]);
-	free(G);
+		SG_FREE(G[j]);
+	SG_FREE(G);
 
 	/* copy */
 	for (index_t i=0; i < m_model->get_dim(); i++)
@@ -555,13 +535,28 @@ SGSparseVector<float64_t> CCCSOSVM::find_cutting_plane(float64_t* margin)
 	for (index_t i = 0; i < num_samples; i++)
 	{
 		CResultSet* result = m_model->argmax(m_w, i);
-		new_constraint.add(result->psi_truth);
-		result->psi_pred.scale(-1.0);
-		new_constraint.add(result->psi_pred);
+		if (result->psi_computed)
+		{
+			new_constraint.add(result->psi_truth);
+			result->psi_pred.scale(-1.0);
+			new_constraint.add(result->psi_pred);
+		}
+		else if(result->psi_computed_sparse)
+		{
+			result->psi_truth_sparse.add_to_dense(1.0, new_constraint.vector,
+					new_constraint.vlen);
+			result->psi_pred_sparse.add_to_dense(-1.0, new_constraint.vector,
+					new_constraint.vlen);
+		}
+		else
+		{
+			SG_ERROR("model(%s) should have either of psi_computed or psi_computed_sparse"
+					"to be set true\n", m_model->get_name());
+		}
 		/*
 		printf("%.16lf %.16lf\n",
-				SGVector<float64_t>::dot(result->psi_truth.vector, result->psi_truth.vector, result->psi_truth.vlen),
-				SGVector<float64_t>::dot(result->psi_pred.vector, result->psi_pred.vector, result->psi_pred.vlen));
+				CMath::dot(result->psi_truth.vector, result->psi_truth.vector, result->psi_truth.vlen),
+				CMath::dot(result->psi_pred.vector, result->psi_pred.vector, result->psi_pred.vlen));
 		*/
 		*margin += result->delta;
 		SG_UNREF(result);
@@ -623,7 +618,7 @@ int32_t CCCSOSVM::resize_cleanup(int32_t size_active, SGVector<int32_t>& idle, S
 		gammaG0[i] = gammaG0[j];
 		cut_error[i] = cut_error[j];
 
-		free(G[i]);
+		SG_FREE(G[i]);
 		G[i] = G[j];
 		G[j] = NULL;
 	//	free_example(dXc[i],0);
@@ -637,7 +632,7 @@ int32_t CCCSOSVM::resize_cleanup(int32_t size_active, SGVector<int32_t>& idle, S
 	}
 	for (k=i;k<size_active;k++)
 	{
-		if (G[k]!=NULL) free(G[k]);
+		if (G[k]!=NULL) SG_FREE(G[k]);
 //		if (dXc[k].num_feat_entries > 0) SG_UNREF(dXc[k]);
 	}
 	new_size_active = i;
@@ -689,6 +684,28 @@ void CCCSOSVM::init()
 	m_max_rho = m_C;
 	m_primal_obj = CMath::INFTY;
 	m_qp_type = MOSEK;
+
+#ifdef USE_MOSEK
+	MSKrescodee r = MSK_RES_OK;
+
+	/* create mosek environment */
+#if (MSK_VERSION_MAJOR == 6)
+	r = MSK_makeenv(&m_msk_env, NULL, NULL, NULL, NULL);
+#elif (MSK_VERSION_MAJOR == 7)
+	r = MSK_makeenv(&m_msk_env, NULL);
+#else
+	#error "Unsupported Mosek version"
+#endif
+
+	/* check return code */
+	if (r != MSK_RES_OK)
+		SG_ERROR("Error while creating mosek env: %d\n", r)
+
+	/* initialize the environment */
+	r = MSK_initenv(m_msk_env);
+	if (r != MSK_RES_OK)
+		SG_ERROR("Error while initializing mosek env: %d\n", r)
+#endif
 
 	SG_ADD(&m_C, "m_C", "C", MS_NOT_AVAILABLE);
 	SG_ADD(&m_eps, "m_eps", "Epsilon", MS_NOT_AVAILABLE);

@@ -11,6 +11,8 @@
 #ifndef _SEQUENCE_LABELS__H__
 #define _SEQUENCE_LABELS__H__
 
+#include <shogun/lib/config.h>
+
 #include <shogun/labels/StructuredLabels.h>
 #include <shogun/lib/SGVector.h>
 #include <shogun/lib/StructuredData.h>
@@ -59,7 +61,6 @@ public:
 	SGVector<int32_t> get_data() const { return data; }
 
 protected:
-
 	/** data sequence */
 	SGVector< int32_t > data;
 

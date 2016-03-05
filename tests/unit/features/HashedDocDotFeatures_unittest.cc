@@ -7,7 +7,7 @@
  * Written (W) 2013 Evangelos Anagnostopoulos
  */
 
-#include <shogun/features/HashedDocDotFeatures.h>
+#include <shogun/features/hashed/HashedDocDotFeatures.h>
 #include <shogun/features/StringFeatures.h>
 #include <shogun/features/SparseFeatures.h>
 #include <shogun/lib/SGStringList.h>
@@ -15,11 +15,8 @@
 #include <shogun/lib/DelimiterTokenizer.h>
 #include <shogun/lib/NGramTokenizer.h>
 #include <shogun/lib/Hash.h>
-#include <shogun/multiclass/MulticlassLibLinear.h>
-#include <shogun/base/init.h>
 #include <gtest/gtest.h>
 
-#include <iostream>
 using namespace shogun;
 
 TEST(HashedDocDotFeaturesTest, computed_features_test)

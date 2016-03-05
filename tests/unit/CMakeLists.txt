@@ -1,15 +1,10 @@
-# transform defines to -D<definition> string
-foreach(D IN LISTS DEFINES)
-	SET(CMAKE_DEFINITIONS "${CMAKE_DEFINITIONS} -D${D}")
-endforeach()
-
 # Find GTEST and GMOCK frameworks
 include(external/GoogleTestNMock)
 ExternalProject_Get_Property(GoogleMock source_dir)
 if(SYSTEM_INCLUDES)
 	INCLUDE_DIRECTORIES(SYSTEM ${SYSTEM_INCLUDES})
 endif()
-include_directories(${source_dir}/include ${INCLUDES} ${source_dir}/gtest/include ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src)
+include_directories(${source_dir}/include ${INCLUDES} ${source_dir}/gtest/include ${CMAKE_CURRENT_SOURCE_DIR})
 LINK_DIRECTORIES(${THIRD_PARTY_DIR}/libs/gmock)
 
 # Generate automatic unittest from jinja2 templates
@@ -23,6 +18,17 @@ ADD_CUSTOM_COMMAND(OUTPUT clone_unittest.cc
 	WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 	COMMENT "Generating clone_unittest.cc")
 LIST(APPEND TEMPLATE_GENERATED_UNITTEST clone_unittest.cc)
+
+ADD_CUSTOM_COMMAND(OUTPUT DynamicObjectArray_unittest.cc
+	COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/base/clone_unittest.cc.py
+	${CMAKE_CURRENT_SOURCE_DIR}/base/DynamicObjectArray_unittest.cc.jinja2
+	DynamicObjectArray_unittest.cc
+	${LIBSHOGUN_SRC_DIR}/base/class_list.cpp
+	DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/base/clone_unittest.cc.py
+	${CMAKE_CURRENT_SOURCE_DIR}/base/DynamicObjectArray_unittest.cc.jinja2
+	WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+	COMMENT "Generating DynamicObjectArray_unittest.cc")
+LIST(APPEND TEMPLATE_GENERATED_UNITTEST DynamicObjectArray_unittest.cc)
 
 ADD_CUSTOM_COMMAND(OUTPUT SerializationAscii_unittest.cc
 	COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/base/clone_unittest.cc.py
@@ -76,7 +82,6 @@ FILE(GLOB_RECURSE UNITTEST_SRC *_unittest.cc)
 
 ADD_EXECUTABLE(shogun-unit-test ${UNITTEST_SRC} ${TEMPLATE_GENERATED_UNITTEST})
 target_link_libraries(shogun-unit-test shogun gmock gtest ${SANITIZER_LIBRARY})
-set_target_properties(shogun-unit-test PROPERTIES COMPILE_DEFINITIONS "${DEFINES}")
 IF (SANITIZER_FLAGS)
 	set_target_properties(shogun-unit-test PROPERTIES COMPILE_FLAGS ${SANITIZER_FLAGS})
 ENDIF()
@@ -86,5 +91,13 @@ ADD_CUSTOM_TARGET(unit-tests
 	DEPENDS shogun-unit-test)
 
 shogun_discover_tests(shogun-unit-test)
+
+# Add unittests to the dependencies of modular interfaces to make sure nothing
+# will infer with them being build single-threaded.
+IF(SWIG_SINGLE_THREADED)
+	FOREACH(SG_MODULAR_INTERFACE_TARGET ${SG_MODULAR_INTERFACE_TARGETS})
+		ADD_DEPENDENCIES(${SG_MODULAR_INTERFACE_TARGET} shogun-unit-test)
+	ENDFOREACH(SG_MODULAR_INTERFACE_TARGET ${SG_MODULAR_INTERFACE_TARGETS})
+ENDIF(SWIG_SINGLE_THREADED)
 
 unset(CMAKE_DEFINITIONS)

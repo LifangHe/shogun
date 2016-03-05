@@ -1,12 +1,33 @@
 /*
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
- * (at your option) any later version.
- *
+ * Copyright (c) The Shogun Machine Learning Toolbox
  * Written (W) 2013 Roman Votyakov
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * The views and conclusions contained in the software and documentation are those
+ * of the authors and should not be interpreted as representing official policies,
+ * either expressed or implied, of the Shogun Development Team.
+ *
  */
-
 #include <shogun/machine/gp/LogitLikelihood.h>
 
 #ifdef HAVE_EIGEN3
@@ -222,6 +243,9 @@ SGVector<float64_t> CLogitLikelihood::get_predictive_means(
 	Map<VectorXd> eigen_r(r.vector, r.vlen);
 
 	// evaluate predictive mean: ymu=2*p-1
+	// Note that the distribution is Bernoulli distribution with p(x=1)=p and
+	// p(x=-1)=(1-p)
+	// the mean of the Bernoulli distribution is 2*p-1
 	eigen_r=2.0*eigen_lp.array().exp()-1.0;
 
 	return r;
@@ -237,6 +261,9 @@ SGVector<float64_t> CLogitLikelihood::get_predictive_variances(
 	Map<VectorXd> eigen_r(r.vector, r.vlen);
 
 	// evaluate predictive variance: ys2=1-(2*p-1).^2
+	// Note that the distribution is Bernoulli distribution with p(x=1)=p and
+	// p(x=-1)=(1-p)
+	// the variance of the Bernoulli distribution is 1-(2*p-1).^2
 	eigen_r=1-(2.0*eigen_lp.array().exp()-1.0).square();
 
 	return r;
@@ -303,7 +330,7 @@ SGVector<float64_t> CLogitLikelihood::get_log_probability_derivative_f(
 	else if (i == 3)
 	{
 		// compute the third derivative: d2lp=-s(f).*(1-s(f)).*(1-2*s(f))
-		eigen_r=-eigen_s.array()*(1.0-eigen_s.array())*(1.0-2*eigen_s.array());
+		eigen_r=-eigen_s.array()*(1.0-eigen_s.array())*(1.0-2.0*eigen_s.array());
 	}
 	else
 	{
@@ -368,7 +395,8 @@ SGVector<float64_t> CLogitLikelihood::get_log_zeroth_moments(
 
 	SG_UNREF(h);
 
-	r.log();
+	for (index_t i=0; i<r.vlen; i++)
+		r[i]=CMath::log(r[i]);
 
 	return r;
 }

@@ -1,6 +1,5 @@
 require 'modshogun'
 require 'load'
-require 'narray'
 require 'pp'
 
 parameter_list = [[1,7],[2,8]]
@@ -8,11 +7,12 @@ parameter_list = [[1,7],[2,8]]
 def classifier_custom_kernel_modular(c=1,dim=7)
 
 	Modshogun::Math.init_random(c)
+	NArray.srand(17)
 
 	lab = (2*NArray.float(dim).random! - 1).sign
 	pp lab
 	data= NMatrix.float(dim, dim).random!
-	symdata=data*data.transpose + NMatrix.float(dim,dim).unit
+	symdata=data*data.transpose + 10*NMatrix.float(dim,dim).unit
 
 	kernel=Modshogun::CustomKernel.new
 	kernel.set_full_kernel_matrix_from_full(data)

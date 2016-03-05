@@ -11,6 +11,8 @@
 #ifndef __MAP_INFERENCE_H__
 #define __MAP_INFERENCE_H__
 
+#include <shogun/lib/config.h>
+
 #include <shogun/base/SGObject.h>
 #include <shogun/lib/SGVector.h>
 #include <shogun/structure/FactorGraph.h>
@@ -22,8 +24,7 @@ namespace shogun
 /** the following inference methods are acceptable:
  * Tree Max Product, Loopy Max Product, LP Relaxation,
  * Sequential Tree Reweighted Max Product (TRW-S),
- * Iterated Conditional Mode (ICM), Naive Mean Field,
- * Structured Mean Field.
+ * Graph cuts
  */
 enum EMAPInferType
 {
@@ -31,9 +32,8 @@ enum EMAPInferType
 	LOOPY_MAX_PROD = 1,
 	LP_RELAXATION = 2,
 	TRWS_MAX_PROD = 3,
-	ITER_COND_MODE = 4,
-	NAIVE_MEAN_FIELD = 5,
-	STRUCT_MEAN_FIELD = 6,
+	GRAPH_CUT = 4,
+	GEMPLP = 5
 };
 
 class CMAPInferImpl;

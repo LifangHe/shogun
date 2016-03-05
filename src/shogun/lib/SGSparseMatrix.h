@@ -13,20 +13,21 @@
 #ifndef __SGSPARSEMATRIX_H__
 #define __SGSPARSEMATRIX_H__
 
+#include <shogun/lib/config.h>
+
 #include <shogun/lib/common.h>
-#include <shogun/lib/DataType.h>
-#include <shogun/lib/SGSparseVector.h>
 #include <shogun/lib/SGReferencedData.h>
-#include <shogun/io/LibSVMFile.h>
+#include <shogun/lib/SGVector.h>
+#include <shogun/io/SGIO.h>
 
 namespace shogun
 {
 
 template <class T> class SGSparseVector;
+template <class ST> struct SGSparseVectorEntry;
 template<class T> class SGMatrix;
 class CFile;
 class CLibSVMFile;
-class CRegressionLabels;
 
 /** @brief template class SGSparseMatrix */
 template <class T> class SGSparseMatrix : public SGReferencedData
@@ -104,17 +105,17 @@ template <class T> class SGSparseMatrix : public SGReferencedData
 		 */
 		inline const T operator()(index_t i_row, index_t i_col) const
 		{
-			REQUIRE(i_row>=0, "index %d negative!\n", i_row);
-			REQUIRE(i_col>=0, "index %d negative!\n", i_col);
-			REQUIRE(i_row<num_vectors, "index should be less than %d, %d provided!\n",
-				num_vectors, i_row);
-			REQUIRE(i_col<num_features, "index should be less than %d, %d provided!\n",
-				num_features, i_col);
+			REQUIRE(i_row>=0, "Provided row index %d negative!\n", i_row);
+			REQUIRE(i_col>=0, "Provided column index %d negative!\n", i_col);
+			REQUIRE(i_row<num_features, "Provided row index (%d) is larger than number of rows (%d)\n",
+							i_row, num_features);
+			REQUIRE(i_col<num_vectors, "Provided column index (%d) is larger than number of columns (%d)\n",
+							i_col, num_vectors);
 
-			for (index_t i=0; i<sparse_matrix[i_row].num_feat_entries; ++i)
+			for (index_t i=0; i<sparse_matrix[i_col].num_feat_entries; ++i)
 			{
-				if (i_col==sparse_matrix[i_row].features[i].feat_index)
-					return sparse_matrix[i_row].features[i].entry;
+				if (i_row==sparse_matrix[i_col].features[i].feat_index)
+					return sparse_matrix[i_col].features[i].entry;
 			}
 			return 0;
 		}
@@ -125,26 +126,25 @@ template <class T> class SGSparseMatrix : public SGReferencedData
 		 */
 		inline T& operator()(index_t i_row, index_t i_col)
 		{
-			REQUIRE(i_row>=0, "index %d negative!\n", i_row);
-			REQUIRE(i_col>=0, "index %d negative!\n", i_col);
-			REQUIRE(i_row<num_vectors, "index should be less than %d, %d provided!\n",
-				num_vectors, i_row);
-			REQUIRE(i_col<num_features, "index should be less than %d, %d provided!\n",
-				num_features, i_col);
+			REQUIRE(i_row>=0, "Provided row index %d negative!\n", i_row);
+			REQUIRE(i_col>=0, "Provided column index %d negative!\n", i_col);
+			REQUIRE(i_row<num_features, "Provided row index (%d) is larger than number of rows (%d)\n",
+							i_row, num_features);
+			REQUIRE(i_col<num_vectors, "Provided column index (%d) is larger than number of columns (%d)\n",
+							i_col, num_vectors);
 
-			for (index_t i=0; i<sparse_matrix[i_row].num_feat_entries; ++i)
+			for (index_t i=0; i<sparse_matrix[i_col].num_feat_entries; ++i)
 			{
-				if (i_col==sparse_matrix[i_row].features[i].feat_index)
-					return sparse_matrix[i_row].features[i].entry;
+				if (i_row==sparse_matrix[i_col].features[i].feat_index)
+					return sparse_matrix[i_col].features[i].entry;
 			}
-			index_t j=sparse_matrix[i_row].num_feat_entries;
-			sparse_matrix[i_row].num_feat_entries=j+1;
-			sparse_matrix[i_row].features=SG_REALLOC(SGSparseVectorEntry<T>,
-				sparse_matrix[i_row].features, j, j+1);
-			sparse_matrix[i_row].features[j].feat_index=i_col;
-			sparse_matrix[i_row].features[j].entry=static_cast<T>(0);
-
-			return sparse_matrix[i_row].features[j].entry;
+			index_t j=sparse_matrix[i_col].num_feat_entries;
+			sparse_matrix[i_col].num_feat_entries=j+1;
+			sparse_matrix[i_col].features=SG_REALLOC(SGSparseVectorEntry<T>,
+				sparse_matrix[i_col].features, j, j+1);
+			sparse_matrix[i_col].features[j].feat_index=i_row;
+			sparse_matrix[i_col].features[j].entry=static_cast<T>(0);
+			return sparse_matrix[i_col].features[j].entry;
 		}
 
 		/** load sparse matrix from file

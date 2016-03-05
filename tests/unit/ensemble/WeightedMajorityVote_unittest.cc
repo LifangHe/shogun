@@ -1,7 +1,7 @@
 #include <shogun/ensemble/WeightedMajorityVote.h>
 #include <shogun/lib/SGMatrix.h>
 #include <shogun/lib/SGVector.h>
-#include <shogun/labels/Labels.h>
+#include <shogun/mathematics/Math.h>
 #include <gtest/gtest.h>
 
 using namespace shogun;
@@ -106,10 +106,10 @@ TEST(WeightedMajorityVote, multiclass_combine_vector)
 	for (index_t i = 0; i < num_classifiers; ++i)
 	{
 		v[i] = sg_rand->random(0, 2);
-		hist[v[i]] += weights[i];
-		if (max < hist[v[i]])
+		hist[index_t(v[i])] += weights[i];
+		if (max < hist[index_t(v[i])])
 		{
-			max = hist[v[i]];
+			max = hist[index_t(v[i])];
 			max_label = v[i];
 		}
 	}

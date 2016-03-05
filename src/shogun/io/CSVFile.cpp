@@ -9,8 +9,11 @@
 
 #include <shogun/io/CSVFile.h>
 
+#include <shogun/io/SGIO.h>
 #include <shogun/lib/SGVector.h>
-#include <shogun/lib/SGMatrix.h>
+#include <shogun/io/LineReader.h>
+#include <shogun/io/Parser.h>
+#include <shogun/lib/DelimiterTokenizer.h>
 
 using namespace shogun;
 
@@ -26,12 +29,14 @@ CCSVFile::CCSVFile(FILE* f, const char* name) :
 	init_with_defaults();
 }
 
+#ifdef HAVE_FDOPEN
 CCSVFile::CCSVFile(int fd, const char* mode, const char* name) :
 	CFile(fd, mode, name)
 {
 	init();
 	init_with_defaults();
 }
+#endif
 
 CCSVFile::CCSVFile(const char* fname, char rw, const char* name) :
 	CFile(fname, rw, name)
@@ -453,26 +458,3 @@ SET_STRING_LIST(floatmax_t)
 SET_STRING_LIST(int16_t)
 SET_STRING_LIST(uint16_t)
 #undef SET_STRING_LIST
-
-void CCSVFile::tokenize(char delim, substring s, v_array<substring>& ret)
-{
-	ret.erase();
-	char *last = s.start;
-	for (; s.start != s.end; s.start++)
-	{
-		if (*s.start == delim)
-		{
-			if (s.start != last)
-			{
-				substring temp = {last,s.start};
-				ret.push(temp);
-			}
-			last = s.start+1;
-		}
-	}
-	if (s.start != last)
-	{
-		substring final = {last, s.start};
-		ret.push(final);
-	}
-}

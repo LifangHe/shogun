@@ -10,6 +10,8 @@
 
 #include <shogun/structure/MAPInference.h>
 #include <shogun/structure/BeliefPropagation.h>
+#include <shogun/structure/GraphCut.h>
+#include <shogun/structure/GEMPLP.h>
 #include <shogun/labels/FactorGraphLabels.h>
 
 using namespace shogun;
@@ -34,6 +36,12 @@ CMAPInference::CMAPInference(CFactorGraph* fg, EMAPInferType inference_method)
 		case TREE_MAX_PROD:
 			m_infer_impl = new CTreeMaxProduct(fg);
 			break;
+		case GRAPH_CUT:
+			m_infer_impl = new CGraphCut(fg);
+			break;
+		case GEMPLP:
+			m_infer_impl = new CGEMPLP(fg);
+			break;
 		case LOOPY_MAX_PROD:
 			SG_ERROR("%s::CMAPInference(): LoopyMaxProduct has not been implemented!\n",
 				get_name());
@@ -44,18 +52,6 @@ CMAPInference::CMAPInference(CFactorGraph* fg, EMAPInferType inference_method)
 			break;
 		case TRWS_MAX_PROD:
 			SG_ERROR("%s::CMAPInference(): TRW-S has not been implemented!\n",
-				get_name());
-			break;
-		case ITER_COND_MODE:
-			SG_ERROR("%s::CMAPInference(): ICM has not been implemented!\n",
-				get_name());
-			break;
-		case NAIVE_MEAN_FIELD:
-			SG_ERROR("%s::CMAPInference(): NaiveMeanField has not been implemented!\n",
-				get_name());
-			break;
-		case STRUCT_MEAN_FIELD:
-			SG_ERROR("%s::CMAPInference(): StructMeanField has not been implemented!\n",
 				get_name());
 			break;
 		default:

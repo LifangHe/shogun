@@ -32,6 +32,12 @@
 %rename(StateModel) CStateModel;
 %rename(TwoStateModel) CTwoStateModel;
 %rename(DirectorStructuredModel) CDirectorStructuredModel;
+%rename(MultilabelSOLabels) CMultilabelSOLabels;
+%rename(SparseMultilabel) CSparseMultilabel;
+%rename(MultilabelModel) CMultilabelModel;
+%rename(HashedMultilabelModel) CHashedMultilabelModel;
+%rename(MultilabelCLRModel) CMultilabelCLRModel;
+%rename(HierarchicalMultilabelModel) CHierarchicalMultilabelModel;
 
 %rename(FactorType) CFactorType;
 %rename(TableFactorType) CTableFactorType;
@@ -43,6 +49,7 @@
 %rename(FactorGraphLabels) CFactorGraphLabels;
 %rename(FactorGraphFeatures) CFactorGraphFeatures;
 %rename(MAPInference) CMAPInference;
+%rename(GraphCut) CGraphCut;
 %rename(FactorGraphModel) CFactorGraphModel;
 
 %rename(SOSVMHelper) CSOSVMHelper;
@@ -56,6 +63,7 @@
 #endif /* USE_MOSEK */
 
 %rename(StochasticSOSVM) CStochasticSOSVM;
+%rename(FWSOSVM) CFWSOSVM;
 
 /* Include Class Headers to make them visible from within the target language */
 %include <shogun/structure/PlifBase.h>
@@ -76,6 +84,11 @@
 %include <shogun/structure/StateModel.h>
 %include <shogun/structure/TwoStateModel.h>
 %include <shogun/structure/DirectorStructuredModel.h>
+%include <shogun/structure/MultilabelSOLabels.h>
+%include <shogun/structure/MultilabelModel.h>
+%include <shogun/structure/HashedMultilabelModel.h>
+%include <shogun/structure/MultilabelCLRModel.h>
+%include <shogun/structure/HierarchicalMultilabelModel.h>
 
 %include <shogun/structure/FactorType.h>
 %include <shogun/structure/Factor.h>
@@ -84,6 +97,7 @@
 %include <shogun/features/FactorGraphFeatures.h>
 %include <shogun/labels/FactorGraphLabels.h>
 %include <shogun/structure/MAPInference.h>
+%include <shogun/structure/GraphCut.h>
 %include <shogun/structure/FactorGraphModel.h>
 
 %include <shogun/structure/SOSVMHelper.h>
@@ -98,3 +112,4 @@
 #endif /* USE_MOSEK */
 
 %include <shogun/structure/StochasticSOSVM.h>
+%include <shogun/structure/FWSOSVM.h>

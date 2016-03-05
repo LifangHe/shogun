@@ -8,16 +8,24 @@
  * Written (W) 1999-2008 Gunnar Raetsch
  * Copyright (C) 1999-2009 Fraunhofer Institute FIRST and Max-Planck-Society
  */
+#include <shogun/lib/config.h>
 #include <shogun/base/SGObject.h>
 #include <shogun/lib/common.h>
 #include <cmath>
 #include <shogun/mathematics/Math.h>
 #include <shogun/mathematics/lapack.h>
 #include <shogun/io/SGIO.h>
+#include <shogun/lib/SGVector.h>
+#include <shogun/mathematics/eigen3.h>
 
-#include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
+#include <float.h>
+
+#ifndef NAN
+#include <stdlib.h>
+#define NAN (strtod("NAN",NULL))
+#endif
+
 
 using namespace shogun;
 
@@ -34,13 +42,20 @@ int32_t CMath::LOGACCURACY         = 0; // 100000 steps per integer
 
 int32_t CMath::LOGRANGE            = 0; // range for logtable: log(1+exp(x))  -25 <= x <= 0
 
-const float64_t CMath::INFTY            =  -log(0.0);	// infinity
-const float64_t CMath::ALMOST_INFTY		=  +1e+20;		//a large number
-const float64_t CMath::ALMOST_NEG_INFTY =  -1000;
+const float64_t CMath::NOT_A_NUMBER    	=  NAN;
+const float64_t CMath::INFTY            =  INFINITY;	// infinity
+const float64_t CMath::ALMOST_INFTY		=  +1e+300;		//a large number
+const float64_t CMath::ALMOST_NEG_INFTY =  -1e+300;
 const float64_t CMath::PI=M_PI;
-const float64_t CMath::MACHINE_EPSILON=5E-16;
-const float64_t CMath::MAX_REAL_NUMBER=1E300;
-const float64_t CMath::MIN_REAL_NUMBER=1E-300;
+const float64_t CMath::MACHINE_EPSILON=DBL_EPSILON;
+const float64_t CMath::MAX_REAL_NUMBER=DBL_MAX;
+const float64_t CMath::MIN_REAL_NUMBER=DBL_MIN;
+const float32_t CMath::F_MAX_VAL32=FLT_MAX;
+const float32_t CMath::F_MIN_NORM_VAL32=FLT_MIN;
+const float64_t CMath::F_MAX_VAL64=DBL_MAX;
+const float64_t CMath::F_MIN_NORM_VAL64=DBL_MIN;
+const float32_t CMath::F_MIN_VAL32=(FLT_MIN * FLT_EPSILON);
+const float64_t CMath::F_MIN_VAL64=(DBL_MIN * DBL_EPSILON);
 
 #ifdef USE_LOGCACHE
 float64_t* CMath::logtable = NULL;
@@ -70,6 +85,40 @@ CMath::~CMath()
 	SG_FREE(CMath::logtable);
 	CMath::logtable=NULL;
 #endif
+}
+
+float64_t CMath::dot(const float64_t* v1, const float64_t* v2, int32_t n)
+{
+	float64_t r=0;
+#ifdef HAVE_EIGEN3
+	Eigen::Map<const Eigen::VectorXd> ev1(v1,n);
+	Eigen::Map<const Eigen::VectorXd> ev2(v2,n);
+	r = ev1.dot(ev2);
+#elif HAVE_LAPACK
+	int32_t skip=1;
+	r = cblas_ddot(n, v1, skip, v2, skip);
+#else
+	for (int32_t i=0; i<n; i++)
+		r+=v1[i]*v2[i];
+#endif
+	return r;
+}
+
+float32_t CMath::dot(const float32_t* v1, const float32_t* v2, int32_t n)
+{
+	float32_t r=0;
+#ifdef HAVE_EIGEN3
+	Eigen::Map<const Eigen::VectorXf> ev1(v1,n);
+	Eigen::Map<const Eigen::VectorXf> ev2(v2,n);
+	r = ev1.dot(ev2);
+#elif HAVE_LAPACK
+	int32_t skip=1;
+	r = cblas_sdot(n, v1, skip, v2, skip);
+#else
+	for (int32_t i=0; i<n; i++)
+		r+=v1[i]*v2[i];
+#endif
+	return r;
 }
 
 #ifdef USE_LOGCACHE
@@ -106,21 +155,21 @@ void CMath::init_log_table()
 void CMath::sort(int32_t *a, int32_t cols, int32_t sort_col)
 {
   int32_t changed=1;
-  if (a[0]==-1) return ;
+  if (a[0]==-1) return;
   while (changed)
   {
-      changed=0; int32_t i=0 ;
+      changed=0; int32_t i=0;
       while ((a[(i+1)*cols]!=-1) && (a[(i+1)*cols+1]!=-1)) // to be sure
 	  {
 		  if (a[i*cols+sort_col]>a[(i+1)*cols+sort_col])
 		  {
 			  for (int32_t j=0; j<cols; j++)
-				  CMath::swap(a[i*cols+j],a[(i+1)*cols+j]) ;
-			  changed=1 ;
-		  } ;
-		  i++ ;
-	  } ;
-  } ;
+				  CMath::swap(a[i*cols+j],a[(i+1)*cols+j]);
+			  changed=1;
+		  };
+		  i++;
+	  };
+  };
 }
 
 void CMath::sort(float64_t *a, int32_t* idx, int32_t N)
@@ -198,13 +247,166 @@ void CMath::linspace(float64_t* output, float64_t start, float64_t end, int32_t 
 	output[n-1] = end;
 }
 
-
 int CMath::is_nan(double f)
 {
+#ifndef HAVE_STD_ISNAN
+#if (HAVE_DECL_ISNAN == 1) || defined(HAVE_ISNAN)
+  return ::isnan(f);
+#else
+  return ((f != f) ? 1 : 0);
+#endif // #if (HAVE_DECL_ISNAN == 1) || defined(HAVE_ISNAN)
+#endif // #ifndef HAVE_STD_ISNAN
+
 	return std::isnan(f);
 }
 
 int CMath::is_infinity(double f)
 {
+#ifndef HAVE_STD_ISINF
+#if (HAVE_DECL_ISINF == 1) || defined(HAVE_ISINF)
+  return ::isinf(f);
+#elif defined(FPCLASS)
+  if (::fpclass(f) == FP_NINF) return -1;
+  else if (::fpclass(f) == FP_PINF) return 1;
+  else return 0;
+#else
+  if ((f == f) && ((f - f) != 0.0)) return (f < 0.0 ? -1 : 1);
+  else return 0;
+}
+#endif // #if (HAVE_DECL_ISINF == 1) || defined(HAVE_ISINF)
+#endif // #ifndef HAVE_STD_ISINF
+
 	return std::isinf(f);
+}
+
+int CMath::is_finite(double f)
+{
+#ifndef HAVE_STD_ISFINITE
+#if (HAVE_DECL_ISFINITE == 1) || defined(HAVE_ISFINITE)
+  return ::isfinite(f);
+#elif defined(HAVE_FINITE)
+  return ::finite(f);
+#else
+  return ((!std::isnan(f) && !std::isinf(f)) ? 1 : 0);
+#endif // #if (HAVE_DECL_ISFINITE == 1) || defined(HAVE_ISFINITE)
+#endif // #ifndef HAVE_STD_ISFINITE
+
+  return std::isfinite(f);
+}
+
+bool CMath::strtof(const char* str, float32_t* float_result)
+{
+	ASSERT(str);
+	ASSERT(float_result);
+
+	SGVector<char> buf(strlen(str)+1);
+
+	for (index_t i=0; i<buf.vlen-1; i++)
+		buf[i]=tolower(str[i]);
+	buf[buf.vlen-1]='\0';
+
+	if (strstr(buf, "inf") != NULL)
+	{
+		*float_result = CMath::INFTY;
+
+		if (strchr(buf,'-') != NULL)
+			*float_result *= -1;
+		return true;
+	}
+
+	if (strstr(buf, "nan") != NULL)
+	{
+		*float_result = CMath::NOT_A_NUMBER;
+		return true;
+	}
+
+	char* endptr = buf.vector;
+	*float_result=::strtof(str, &endptr);
+	return endptr != buf.vector;
+}
+
+bool CMath::strtod(const char* str, float64_t* double_result)
+{
+	ASSERT(str);
+	ASSERT(double_result);
+
+	SGVector<char> buf(strlen(str)+1);
+
+	for (index_t i=0; i<buf.vlen-1; i++)
+		buf[i]=tolower(str[i]);
+	buf[buf.vlen-1]='\0';
+
+	if (strstr(buf, "inf") != NULL)
+	{
+		*double_result = CMath::INFTY;
+
+		if (strchr(buf,'-') != NULL)
+			*double_result *= -1;
+		return true;
+	}
+
+	if (strstr(buf, "nan") != NULL)
+	{
+		*double_result = CMath::NOT_A_NUMBER;
+		return true;
+	}
+
+	char* endptr = buf.vector;
+	*double_result=::strtod(str, &endptr);
+	return endptr != buf.vector;
+}
+
+bool CMath::strtold(const char* str, floatmax_t* long_double_result)
+{
+	ASSERT(str);
+	ASSERT(long_double_result);
+
+	SGVector<char> buf(strlen(str)+1);
+
+	for (index_t i=0; i<buf.vlen-1; i++)
+		buf[i]=tolower(str[i]);
+	buf[buf.vlen-1]='\0';
+
+	if (strstr(buf, "inf") != NULL)
+	{
+		*long_double_result = CMath::INFTY;
+
+		if (strchr(buf,'-') != NULL)
+			*long_double_result *= -1;
+		return true;
+	}
+
+	if (strstr(buf, "nan") != NULL)
+	{
+		*long_double_result = CMath::NOT_A_NUMBER;
+		return true;
+	}
+
+	char* endptr = buf.vector;
+
+// fall back to double on win32 / cygwin since strtold is undefined there
+#if defined(WIN32) || defined(__CYGWIN__)
+	*long_double_result=::strtod(str, &endptr);
+#else
+	*long_double_result=::strtold(str, &endptr);
+#endif
+
+	return endptr != buf.vector;
+}
+
+float64_t CMath::get_abs_tolerance(float64_t true_value, float64_t rel_tolerance)
+{
+	REQUIRE(rel_tolerance > 0 && rel_tolerance < 1.0,
+		"Relative tolerance (%f) should be less than 1.0 and positive\n", rel_tolerance);
+	REQUIRE(is_finite(true_value),
+		"The true_value should be finite\n");
+	float64_t abs_tolerance = rel_tolerance;
+	if (abs(true_value)>0.0)
+	{
+		if (log(abs(true_value)) + log(rel_tolerance) < log(F_MIN_VAL64))
+			abs_tolerance = F_MIN_VAL64;
+		else
+			abs_tolerance = abs(true_value * rel_tolerance);
+	}
+	return abs_tolerance;
 }

@@ -90,11 +90,11 @@ bool CMulticlassOCAS::train_machine(CFeatures* data)
 
 	mocas_data user_data;
 	user_data.features = m_features;
-	user_data.W = SG_MALLOC(float64_t, (int64_t)num_features*num_classes);
-	user_data.oldW = SG_MALLOC(float64_t, (int64_t)num_features*num_classes);
-	user_data.new_a = SG_MALLOC(float64_t, (int64_t)num_features*num_classes);
-	user_data.full_A = SG_MALLOC(float64_t, (int64_t)num_features*num_classes*m_buf_size);
-	user_data.output_values = SG_MALLOC(float64_t, num_vectors);
+	user_data.W = SG_CALLOC(float64_t, (int64_t)num_features*num_classes);
+	user_data.oldW = SG_CALLOC(float64_t, (int64_t)num_features*num_classes);
+	user_data.new_a = SG_CALLOC(float64_t, (int64_t)num_features*num_classes);
+	user_data.full_A = SG_CALLOC(float64_t, (int64_t)num_features*num_classes*m_buf_size);
+	user_data.output_values = SG_CALLOC(float64_t, num_vectors);
 	user_data.data_y = labels.vector;
 	user_data.nY = num_classes;
 	user_data.nDim = num_features;
@@ -155,7 +155,7 @@ float64_t CMulticlassOCAS::msvm_update_W(float64_t t, void* user_data)
 	for(uint32_t j=0; j < nY*nDim; j++)
 		W[j] = oldW[j]*(1-t) + t*W[j];
 
-	float64_t sq_norm_W = SGVector<float64_t>::dot(W,W,nDim*nY);
+	float64_t sq_norm_W = CMath::dot(W,W,nDim*nY);
 
 	return sq_norm_W;
 }
@@ -183,8 +183,8 @@ void CMulticlassOCAS::msvm_full_compute_W(float64_t *sq_norm_W, float64_t *dp_Wo
 		}
 	}
 
-	*sq_norm_W = SGVector<float64_t>::dot(W,W,nDim*nY);
-	*dp_WoldW = SGVector<float64_t>::dot(W,oldW,nDim*nY);
+	*sq_norm_W = CMath::dot(W,W,nDim*nY);
+	*dp_WoldW = CMath::dot(W,oldW,nDim*nY);
 
 	return;
 }
@@ -217,7 +217,7 @@ int CMulticlassOCAS::msvm_full_add_new_cut(float64_t *new_col_H, uint32_t *new_c
 	}
 
 	// compute new_a'*new_a and insert new_a to the last column of full_A
-	sq_norm_a = SGVector<float64_t>::dot(new_a,new_a,nDim*nY);
+	sq_norm_a = CMath::dot(new_a,new_a,nDim*nY);
 	for(j=0; j < nDim*nY; j++ )
 		full_A[LIBOCAS_INDEX(j,nSel,nDim*nY)] = new_a[j];
 

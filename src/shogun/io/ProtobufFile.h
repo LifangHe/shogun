@@ -7,17 +7,33 @@
  * Written (W) 2013 Evgeniy Andreev (gsomix)
  */
 
-#ifdef HAVE_PROTOBUF
-
 #ifndef __PROTOBUFFILE_H__
 #define __PROTOBUFFILE_H__
 
+#include <shogun/lib/config.h>
+
+#ifdef HAVE_PROTOBUF
+
 #include <shogun/io/File.h>
+
+// a hack to avoid clashes with apple's ConditionalMacros.h
+#ifdef __APPLE__
+    #ifdef TYPE_BOOL
+        #define ___APPLE_TYPE_BOOL TYPE_BOOL
+        #undef TYPE_BOOL
+    #endif
+#endif
+
+#ifdef __APPLE__
+    #ifdef ___APPLE_TYPE_BOOL
+        #define TYPE_BOOL ___APPLE_TYPE_BOOL
+        #undef ___APPLE_TYPE_BOOL
+    #endif
+#endif
+
 #include <shogun/io/protobuf/ShogunVersion.pb.h>
 #include <shogun/io/protobuf/Headers.pb.h>
 #include <shogun/io/protobuf/Chunks.pb.h>
-
-#include <google/protobuf/message.h>
 
 namespace shogun
 {
@@ -26,11 +42,13 @@ namespace shogun
  * in protobuf format.
  *
  * Format of serialized data in byte file:
- * <size of ShogunVersion message - big endian uint32>
- * <ShogunVersion message>
- * <size of next message - big endian uint32>
- * <data message, e.g. Int32Chunk>
+ * <pre>
+ * size of ShogunVersion message - big endian uint32
+ * ShogunVersion message
+ * size of next message - big endian uint32
+ * data message, e.g. Int32Chunk
  * ...
+ * </pre>
  */
 class CProtobufFile : public CFile
 {
@@ -56,6 +74,7 @@ public:
 	/** destructor */
 	virtual ~CProtobufFile();
 
+#ifndef SWIG // SWIG should skip this
 	/** @name Vector Access Functions
 	 *
 	 * Functions to access vectors of one of the several base data types.
@@ -342,6 +361,7 @@ public:
 	virtual void set_string_list(
 			const SGString<floatmax_t>* strings, int32_t num_str);
 	//@}
+#endif // #ifndef SWIG // SWIG should skip this
 
 	virtual const char* get_name() const { return "ProtobufFile"; }
 
@@ -616,6 +636,5 @@ private:
 
 }
 
-#endif /** __PROTOBUFFILE_H__ */
-
 #endif /** HAVE_PROTOBUF */
+#endif /** __PROTOBUFFILE_H__ */

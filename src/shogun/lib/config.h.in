@@ -1,3 +1,6 @@
+#ifndef __SHOGUN_LIB_CONFIG_H__
+#define __SHOGUN_LIB_CONFIG_H__
+
 #cmakedefine MACHINE "@MACHINE@"
 #cmakedefine CONFIGURE_OPTIONS "@CONFIGURE_OPTIONS@"
 #cmakedefine COMPFLAGS_CPP "@COMPFLAGS_CPP@"
@@ -18,8 +21,11 @@
 
 #cmakedefine HAVE_ARPACK 1
 #cmakedefine HAVE_EIGEN3 1
+#cmakedefine HAVE_VIENNACL 1
+#cmakedefine HAVE_OPENCV 1
 #cmakedefine HAVE_CATLAS 1
 #cmakedefine HAVE_ATLAS 1
+#cmakedefine HAVE_MKL 1
 #cmakedefine HAVE_NLOPT 1
 #cmakedefine USE_LPSOLVE 1
 #cmakedefine HAVE_PTHREAD 1
@@ -33,6 +39,65 @@
 #cmakedefine HAVE_LOG2 1
 #cmakedefine USE_LOGCACHE 1
 #cmakedefine USE_LOGSUMARRAY 1
+
+/* Tells ViennaCL to use OpenCL as computation backend */
+#cmakedefine VIENNACL_WITH_OPENCL 1
+
+/* for linear algebra global backend setups */
+#cmakedefine HAVE_LINALG_LIB 1
+
+#cmakedefine USE_EIGEN3 1
+#cmakedefine USE_VIENNACL 1
+
+#cmakedefine USE_EIGEN3_CORE 1
+#cmakedefine USE_VIENNACL_CORE 1
+
+#cmakedefine USE_EIGEN3_REDUX 1
+#cmakedefine USE_VIENNACL_REDUX 1
+
+#cmakedefine USE_EIGEN3_LINSLV 1
+#cmakedefine USE_VIENNACL_LINSLV 1
+
+#cmakedefine USE_EIGEN3_EIGSLV 1
+#cmakedefine USE_VIENNACL_EIGSLV 1
+
+/* Define to 1 if you have the declaration of `isfinite', and to 0 if you
+   don't. */
+#cmakedefine HAVE_DECL_ISFINITE 1
+
+/* Define to 1 if you have the declaration of `isinf', and to 0 if you don't. */
+#cmakedefine HAVE_DECL_ISINF 1
+
+/* Define to 1 if you have the declaration of `isnan', and to 0 if you don't. */
+#cmakedefine HAVE_DECL_ISNAN 1
+
+/* Define to 1 if you have the `finite' function. */
+#cmakedefine HAVE_FINITE 1
+
+/* Define to 1 if you have the `fpclass' function. */
+#cmakedefine HAVE_FPCLASS 1
+
+/* Define to 1 if you have the `isfinite' function. */
+#cmakedefine HAVE_ISFINITE 1
+
+/* Define to 1 if you have the `isinf' function. */
+#cmakedefine HAVE_ISINF 1
+
+/* Define to 1 if you have the `isnan' function. */
+#cmakedefine HAVE_ISNAN 1
+
+/* Define to 1 if you have the `std::isfinite' function. */
+#cmakedefine HAVE_STD_ISFINITE 1
+
+/* Define to 1 if you have the `std::isinf' function. */
+#cmakedefine HAVE_STD_ISINF 1
+
+/* Define to 1 if you have the `std::isnan' function. */
+#cmakedefine HAVE_STD_ISNAN 1
+
+#cmakedefine HAVE_DECL_SIGNGAM 1
+
+#cmakedefine HAVE_FDOPEN 1
 
 #cmakedefine USE_SPINLOCKS 1
 #cmakedefine USE_SHORTREAL_KERNELCACHE 1
@@ -73,5 +138,10 @@
 #cmakedefine HAVE_CXX0X 1
 #cmakedefine HAVE_CXX11 1
 #cmakedefine HAVE_CXX11_ATOMIC 1
+#cmakedefine HAVE_STD_UNORDERED_MAP 1
 
-#cmakedefine HAVE_JBLAS 1
+/* random related defines */
+#cmakedefine HAVE_ARC4RANDOM 1
+#cmakedefine DEV_RANDOM "@DEV_RANDOM@"
+
+#endif /* __SHOGUN_LIB_CONFIG_H__ */

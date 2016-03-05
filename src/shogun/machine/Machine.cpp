@@ -10,9 +10,6 @@
  */
 
 #include <shogun/machine/Machine.h>
-#include <shogun/base/Parameter.h>
-#include <shogun/mathematics/Math.h>
-#include <shogun/base/ParameterMap.h>
 
 using namespace shogun;
 
@@ -32,13 +29,6 @@ CMachine::CMachine() : CSGObject(), m_max_train_time(0), m_labels(NULL),
 	       "Should feature data of model be stored after training?", MS_NOT_AVAILABLE);
 	SG_ADD(&m_data_locked, "data_locked",
 			"Indicates whether data is locked", MS_NOT_AVAILABLE);
-
-	m_parameter_map->put(
-		new SGParamInfo("data_locked", CT_SCALAR, ST_NONE, PT_BOOL, 1),
-		new SGParamInfo()
-	);
-
-	m_parameter_map->finalize_map();
 }
 
 CMachine::~CMachine()
@@ -279,5 +269,3 @@ CLatentLabels* CMachine::apply_locked_latent(SGVector<index_t> indices)
 			"for %s\n", get_name());
 	return NULL;
 }
-
-

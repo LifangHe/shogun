@@ -8,9 +8,8 @@
  * Copyright (C) 2013 Evangelos Anagnostopoulos
  */
 
-#include <shogun/base/init.h>
 #include <shogun/lib/Hash.h>
-#include <shogun/features/HashedSparseFeatures.h>
+#include <shogun/features/hashed/HashedSparseFeatures.h>
 #include <gtest/gtest.h>
 
 using namespace shogun;

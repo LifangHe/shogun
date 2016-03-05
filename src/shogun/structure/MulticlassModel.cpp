@@ -4,6 +4,7 @@
  * the Free Software Foundation; either version 3 of the License, or
  * (at your option) any later version.
  *
+ * Written (W) 2013 Thoralf Klein
  * Written (W) 2012 Fernando José Iglesias García
  * Copyright (C) 2012 Fernando José Iglesias García
  */
@@ -29,6 +30,11 @@ CMulticlassModel::CMulticlassModel()
 
 CMulticlassModel::~CMulticlassModel()
 {
+}
+
+CStructuredLabels* CMulticlassModel::structured_labels_factory(int32_t num_labels)
+{
+	return new CMulticlassSOLabels(num_labels);
 }
 
 int32_t CMulticlassModel::get_dim() const
@@ -100,6 +106,7 @@ CResultSet* CMulticlassModel::argmax(
 	// Build the CResultSet object to return
 	CResultSet* ret = new CResultSet();
 	SG_REF(ret);
+	ret->psi_computed = true;
 	CRealNumber* y  = new CRealNumber(ypred);
 	SG_REF(y);
 
@@ -111,7 +118,7 @@ CResultSet* CMulticlassModel::argmax(
 		ret->delta     = CStructuredModel::delta_loss(feat_idx, y);
 		ret->psi_truth = CStructuredModel::get_joint_feature_vector(
 					feat_idx, feat_idx);
-		ret->score    -= SGVector< float64_t >::dot(w.vector,
+		ret->score    -= CMath::dot(w.vector,
 					ret->psi_truth.vector, dim);
 	}
 
@@ -151,8 +158,8 @@ void CMulticlassModel::init_primal_opt(
 		SGVector< float64_t > a,
 		SGMatrix< float64_t > B,
 		SGVector< float64_t > & b,
-		SGVector< float64_t > lb,
-		SGVector< float64_t > ub,
+		SGVector< float64_t > & lb,
+		SGVector< float64_t > & ub,
 		SGMatrix< float64_t > & C)
 {
 	C = SGMatrix< float64_t >::create_identity_matrix(get_dim(), regularization);

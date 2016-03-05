@@ -4,12 +4,15 @@
  * the Free Software Foundation; either version 3 of the License, or
  * (at your option) any later version.
  *
+ * Written (W) 2013 Thoralf Klein
  * Written (W) 2012 Fernando José Iglesias García
  * Copyright (C) 2012 Fernando José Iglesias García
  */
 
 #ifndef _MULTICLASS_SO_LABELS__H__
 #define _MULTICLASS_SO_LABELS__H__
+
+#include <shogun/lib/config.h>
 
 #include <shogun/labels/StructuredLabels.h>
 #include <shogun/lib/SGVector.h>
@@ -19,6 +22,7 @@
 namespace shogun
 {
 
+class CStructuredLabels;
 class CMulticlassSOLabels;
 
 /** @brief Class CRealNumber to be used in the application of Structured
@@ -69,6 +73,12 @@ class CMulticlassSOLabels : public CStructuredLabels
 		/** default constructor */
 		CMulticlassSOLabels();
 
+		/** create label vector of given size
+		 *
+		 * @param num_labels size of label vector
+		 */
+		CMulticlassSOLabels(int32_t num_labels);
+
 		/** constructor
 		 *
 		 * @param src labels to set
@@ -84,6 +94,42 @@ class CMulticlassSOLabels : public CStructuredLabels
 		 */
 		inline int32_t get_num_classes() { return m_num_classes; }
 
+		/**
+		 * add a new label to the vector of labels, effectively
+		 * increasing the number of elements of the structure. This
+		 * method should be used when inserting labels for the first
+		 * time.
+		 *
+		 * @param label label to add
+		 */
+		virtual void add_label(CStructuredData* label);
+
+		/** get label object for specified index
+		 *
+		 * @param idx index of the label
+		 *
+		 * @return label object
+		 */
+		virtual CStructuredData* get_label(int32_t idx);
+
+		/**
+		 * set label, possible with subset. This method should be used
+		 * when substituting labels previously inserted. To insert new
+		 * labels, use the method add_label.
+		 *
+		 * @param idx index of label to set
+		 * @param label value of label
+		 *
+		 * @return if setting was successful
+		 */
+		virtual bool set_label(int32_t idx, CStructuredData* label);
+
+		/** get number of labels, depending on wheter a subset is set
+		 *
+		 * @return number of labels
+		 */
+		virtual int32_t get_num_labels() const;
+
 		/** @return object name */
 		virtual const char* get_name() const { return "MulticlassSOLabels"; }
 
@@ -93,6 +139,9 @@ class CMulticlassSOLabels : public CStructuredLabels
 	private:
 		/** number of classes */
 		int32_t m_num_classes;
+
+		SGVector< float64_t > m_labels_vector;
+		int32_t m_num_labels_set;
 
 }; /* CMulticlassSOLabels */
 

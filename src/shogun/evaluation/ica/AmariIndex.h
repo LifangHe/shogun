@@ -2,6 +2,8 @@
 
 #ifdef HAVE_EIGEN3
 
+#include <shogun/lib/config.h>
+
 /**
  * @brief function amari_index
  *
@@ -10,7 +12,7 @@
  *
  * @param W the estimated mixing matrix
  * @param A the given mixing matrix
- * @param flag to standardize or not
+ * @param standardize flag indicating whether to standardize or not
  *
  */
 float64_t amari_index(shogun::SGMatrix<float64_t> W, shogun::SGMatrix<float64_t> A, bool standardize);

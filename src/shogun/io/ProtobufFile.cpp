@@ -6,14 +6,17 @@
  *
  * Written (W) 2013 Evgeniy Andreev (gsomix)
  */
+#include <shogun/io/ProtobufFile.h>
+
 #ifdef HAVE_PROTOBUF
 
-#include <shogun/io/ProtobufFile.h>
+#include <shogun/io/SGIO.h>
 
 #include <shogun/lib/SGVector.h>
 #include <shogun/lib/SGMatrix.h>
 #include <shogun/lib/SGSparseVector.h>
 #include <shogun/lib/SGString.h>
+#include <google/protobuf/message.h>
 
 using namespace shogun;
 

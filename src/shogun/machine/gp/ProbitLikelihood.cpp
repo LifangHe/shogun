@@ -1,12 +1,33 @@
 /*
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
- * (at your option) any later version.
- *
+ * Copyright (c) The Shogun Machine Learning Toolbox
  * Written (W) 2013 Roman Votyakov
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * The views and conclusions contained in the software and documentation are those
+ * of the authors and should not be interpreted as representing official policies,
+ * either expressed or implied, of the Shogun Development Team.
+ *
  */
-
 #include <shogun/machine/gp/ProbitLikelihood.h>
 
 #ifdef HAVE_EIGEN3
@@ -99,43 +120,49 @@ SGVector<float64_t> CProbitLikelihood::get_log_probability_derivative_f(
 
 	Map<VectorXd> eigen_f(func.vector, func.vlen);
 
+	SGVector<float64_t> dlp(func.vlen);
+	Map<VectorXd> eigen_dlp(dlp.vector, dlp.vlen);
+
+	VectorXd eigen_yf=eigen_y.cwiseProduct(eigen_f);
+
+	for (index_t j=0; j<eigen_yf.size(); j++)
+	{
+		float64_t v = eigen_yf[j];
+		if (v<CStatistics::ERFC_CASE2)
+		{
+			//dlp( id2) = abs(den./num) * sqrt(2/pi); % strictly positive first derivative
+			eigen_dlp[j]=CMath::sqrt(2.0/CMath::PI)
+				/CMath::abs(CStatistics::erfc8_weighted_sum(v));
+		}
+		else
+		{
+			//dlp(~id2) = exp(-z(~id2).*z(~id2)/2-lp(~id2))/sqrt(2*pi); % safe computation
+			eigen_dlp[j]=CMath::exp(-v*v/2.0-CStatistics::lnormal_cdf(v))
+				/CMath::sqrt(2.0*CMath::PI);
+		}
+	}
+
 	SGVector<float64_t> r(func.vlen);
 	Map<VectorXd> eigen_r(r.vector, r.vlen);
 
-	// compute ncdf=normal_cdf(y.*f)
-	VectorXd eigen_ncdf=eigen_y.cwiseProduct(eigen_f);
-
-	for (index_t j=0; j<eigen_ncdf.size(); j++)
-		eigen_ncdf[j]=CStatistics::normal_cdf(eigen_ncdf[j]);
-
-	// compute npdf=normal_pdf(f)=(1/sqrt(2*pi))*exp(-f.^2/2)
-	VectorXd eigen_npdf=(1.0/CMath::sqrt(2.0*CMath::PI))*
-		(-0.5*eigen_f.array().square()).exp();
-
-	// compute z=npdf/ncdf
-	VectorXd eigen_z=eigen_npdf.cwiseQuotient(eigen_ncdf);
-
 	// compute derivatives of log probability wrt f
-	if (i == 1)
-	{
-		// compute the first derivative: dlp=y*z
-		eigen_r=eigen_y.cwiseProduct(eigen_z);
-	}
-	else if (i == 2)
-	{
-		// compute the second derivative: d2lp=-z.^2-y.*f.*z
-		eigen_r=-eigen_z.array().square()-eigen_y.array()*eigen_f.array()*
-			eigen_z.array();
-	}
-	else if (i == 3)
-	{
-		VectorXd eigen_z2=eigen_z.cwiseProduct(eigen_z);
-		VectorXd eigen_z3=eigen_z2.cwiseProduct(eigen_z);
 
-		// compute the third derivative: d3lp=2*y.*z.^3+3*f.*z.^2+z.*y.*(f.^2-1)
-		eigen_r=2.0*eigen_y.array()*eigen_z3.array()+3.0*eigen_f.array()*
-			eigen_z2.array()+eigen_z.array()*eigen_y.array()*
-			(eigen_f.array().square()-1.0);
+	if (i==1)
+		eigen_r=eigen_dlp;
+	else
+		//d2lp = -dlp.*abs(z+dlp);             % strictly negative second derivative
+		eigen_r=(-eigen_dlp.array()*((eigen_yf.array()+eigen_dlp.array()).abs().array())).matrix();
+
+	if (i==3)
+		//d3lp = -d2lp.*abs(z+2*dlp)-dlp;     % strictly positive third derivative
+		eigen_r=(-eigen_r.array()*((eigen_yf.array()+2.0*eigen_dlp.array()).abs().array())
+		 -eigen_dlp.array()).matrix();
+
+	if (i==1 || i==3)
+	{
+		//varargout{2} = y.*varargout{2}
+		//varargout{4} = y.*varargout{4}
+		eigen_r=(eigen_r.array()*eigen_y.array()).matrix();
 	}
 
 	return r;

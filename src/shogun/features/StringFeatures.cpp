@@ -5,6 +5,7 @@
 #include <shogun/io/SGIO.h>
 #include <shogun/mathematics/Math.h>
 #include <shogun/base/Parameter.h>
+#include <shogun/lib/SGStringList.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -569,13 +570,20 @@ template<class ST> void CStringFeatures<ST>::load_ascii_file(char* fname, bool r
 	}
 
 	SG_FREE(dummy);
+	SG_FREE(overflow);
 
 	SG_UNREF(alphabet);
 
 	if (remap_to_bin)
+	{
 		alphabet=alpha_bin;
+		SG_UNREF(alpha);
+	}
 	else
+	{
 		alphabet=alpha;
+		SG_UNREF(alpha_bin);
+	}
 	SG_REF(alphabet);
 	num_symbols=alphabet->get_num_symbols();
 }

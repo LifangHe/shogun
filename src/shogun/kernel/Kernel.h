@@ -15,6 +15,8 @@
 #ifndef _KERNEL_H___
 #define _KERNEL_H___
 
+#include <shogun/lib/config.h>
+
 #include <shogun/lib/common.h>
 #include <shogun/lib/Signal.h>
 #include <shogun/io/SGIO.h>
@@ -22,6 +24,7 @@
 #include <shogun/mathematics/Math.h>
 #include <shogun/features/FeatureTypes.h>
 #include <shogun/base/SGObject.h>
+#include <shogun/lib/SGMatrix.h>
 #include <shogun/features/Features.h>
 #include <shogun/kernel/normalizer/KernelNormalizer.h>
 
@@ -109,9 +112,11 @@ enum EKernelType
 	K_JENSENSHANNON = 470,
 	K_DIRECTOR = 480,
 	K_PRODUCT = 490,
-	K_LINEARARD = 500,
+	K_EXPONENTIALARD = 500,
 	K_GAUSSIANARD = 510,
-	K_STREAMING = 520
+	K_GAUSSIANARDSPARSE = 511,
+	K_STREAMING = 520,
+	K_PERIODIC = 530
 };
 
 /** kernel property */
@@ -231,16 +236,14 @@ class CKernel : public CSGObject
 			REQUIRE(rhs, "CKernel::get_kernel_diagonal(): Right-handside "
 						"features missing!\n");
 
-			REQUIRE(lhs->get_num_vectors()==rhs->get_num_vectors(),
-					"CKernel::get_kernel_diagonal(): Left- and right-"
-					"handside features must be equal sized\n");
+			int32_t length=CMath::min(lhs->get_num_vectors(),rhs->get_num_vectors());
 
 			/* allocate space if necessary */
 			if (!preallocated.vector)
-				preallocated=SGVector<float64_t>(lhs->get_num_vectors());
+				preallocated=SGVector<float64_t>(length);
 			else
 			{
-				REQUIRE(preallocated.vlen==lhs->get_num_vectors(),
+				REQUIRE(preallocated.vlen==length,
 						"%s::get_kernel_diagonal(): Preallocated vector has"
 						" wrong size!\n", get_name());
 			}
@@ -283,12 +286,167 @@ class CKernel : public CSGObject
 			return row;
 		}
 
+		/**
+		 * Computes sum from a symmetric part of the kernel matrix that always
+		 * is supposed to contain the main upper diagonal.
+		 * This method is useful while computing statistical estimation of
+		 * mean/variance over kernel values but the kernel matrix is too huge
+		 * to be fit inside memory.
+		 *
+		 * @param block_begin the row and col index at which the block starts
+		 * @param block_size the number of rows and cols in the block
+		 *
+		 * For example, block_begin 4 and block_size 5 represents the block
+		 * that starts at index (4,4) in the kernel matrix and goes upto
+		 * (4+5-1,4+5-1) i.e. (8,8) both inclusive
+		 *
+		 * @param no_diag if true (default), the diagonal elements are excluded
+		 * from the sum
+		 *
+		 * @return sum of kernel values within the block computed as
+		 * \f[
+		 *	\sum_{i}\sum_{j}k(i+\text{block-begin}, j+\text{block-begin})
+		 * \f]
+		 * where \f$i,j\in[0,\text{block-size}-1]\f$
+		 */
+		virtual float64_t sum_symmetric_block(index_t block_begin,
+				index_t block_size, bool no_diag=true);
+
+		/**
+		 * Computes sum of kernel values from a specified block.
+		 * This method is useful while computing statistical estimation of
+		 * mean/variance over kernel values but the kernel matrix is too huge
+		 * to be fit inside memory.
+		 *
+		 * @param block_begin_row the row index at which the block starts
+		 * @param block_begin_col the col index at which the block starts
+		 * @param block_size_row the number of rows in the block
+		 * @param block_size_col the number of cols in the block
+		 *
+		 * For example, block_begin_row 0, block_begin_col 4 and block_size_row
+		 * 5, block_size_col 6 represents the block
+		 * that starts at index (0,4) in the kernel matrix and goes upto
+		 * (0+5-1,4+6-1) i.e. (4,9) both inclusive
+		 *
+		 * @param no_diag if true (default is false), the diagonal elements
+		 * are excluded from the sum, provided that block_size_row
+		 * and block_size_col are same (i.e. the block is square). Otherwise,
+		 * these are always added
+		 *
+		 * @return sum of kernel values within the block computed as
+		 * \f[
+		 *	\sum_{i}\sum_{j}k(i+\text{block-begin-row}, j+\text{block-begin-col})
+		 * \f]
+		 * where \f$i\in[0,\text{block-size-row}-1]\f$ and
+		 * \f$j\in[0,\text{block-size-col}-1]\f$
+		 */
+		virtual float64_t sum_block(index_t block_begin_row,
+				index_t block_begin_col, index_t block_size_row,
+				index_t block_size_col, bool no_diag=false);
+
+		/**
+		 * Computes row-wise/col-wise sum from a symmetric part of the kernel
+		 * matrix that always is supposed to contain the main upper diagonal.
+		 * This method is useful while computing statistical estimation of
+		 * mean/variance over kernel values but the kernel matrix is too huge
+		 * to be fit inside memory.
+		 *
+		 * @param block_begin the row and col index at which the block starts
+		 * @param block_size the number of rows and cols in the block
+		 *
+		 * For Example, block_begin 4 and block_size 5 represents the block
+		 * that starts at index (4,4) in the kernel matrix and goes upto
+		 * (4+5-1,4+5-1) i.e. (8,8) both inclusive
+		 *
+		 * @param no_diag if true (default), the diagonal elements are excluded
+		 * from the row/col-wise sum
+		 *
+		 * @return vector containing row-wise sum computed as
+		 * \f[
+		 *	v[i]=\sum_{j}k(i+\text{block-begin}, j+\text{block-begin})
+		 * \f]
+		 * where \f$i,j\in[0,\text{block-size}-1]\f$
+		 */
+		virtual SGVector<float64_t> row_wise_sum_symmetric_block(index_t
+				block_begin, index_t block_size, bool no_diag=true);
+
+		/**
+		 * Computes row-wise/col-wise sum and squared sum of kernel values from
+		 * a symmetric part of the kernel matrix that always is supposed to
+		 * contain the main upper diagonal.
+		 * This method is useful while computing statistical estimation of
+		 * mean/variance over kernel values but the kernel matrix is too huge
+		 * to be fit inside memory.
+		 *
+		 * @param block_begin the row and col index at which the block starts
+		 * @param block_size the number of rows and cols in the block
+		 *
+		 * For Example, block_begin 4 and block_size 5 represents the block
+		 * that starts at index (4,4) in the kernel matrix and goes upto
+		 * (4+5-1,4+5-1) i.e. (8,8) both inclusive
+		 *
+		 * @param no_diag if true (default), the diagonal elements are excluded
+		 * from the row/col-wise sum
+		 *
+		 * @return a matrix whose first column contains the row-wise sum of
+		 * kernel values computed as
+		 * \f[
+		 *	v_0[i]=\sum_{j}k(i+\text{block-begin}, j+\text{block-begin})
+		 * \f]
+		 * and second column contains the row-wise sum of squared kernel values
+		 * \f[
+		 *	v_1[i]=\sum_{j}^k^2(i+\text{block-begin}, j+\text{block-begin})
+		 * \f]
+		 * where \f$i,j\in[0,\text{block-size}-1]\f$
+		 */
+		virtual SGMatrix<float64_t> row_wise_sum_squared_sum_symmetric_block(
+				index_t block_begin, index_t block_size, bool no_diag=true);
+
+		/**
+		 * Computes row-wise/col-wise sum of kernel values.
+		 * This method is useful while computing statistical estimation of
+		 * mean/variance over kernel values but the kernel matrix is too huge
+		 * to be fit inside memory.
+		 *
+		 * @param block_begin_row the row index at which the block starts
+		 * @param block_begin_col the col index at which the block starts
+		 * @param block_size_row the number of rows in the block
+		 * @param block_size_col the number of cols in the block
+		 *
+		 * For Example, block_begin_row 0, block_begin_col 4 and block_size_row
+		 * 5, block_size_col 6 represents the block
+		 * that starts at index (0,4) in the kernel matrix and goes upto
+		 * (0+5-1,4+6-1) i.e. (4,9) both inclusive
+		 *
+		 * @param no_diag if true (default is false), the diagonal elements
+		 * are excluded from the row/col-wise sum, provided that block_size_row
+		 * and block_size_col are same (i.e. the block is square). Otherwise,
+		 * these are always added
+		 *
+		 * @return a vector whose first block_size_row entries contain
+		 * row-wise sum of kernel values computed as
+		 * \f[
+		 *	v[i]=\sum_{j}k(i+\text{block-begin-row}, j+\text{block-begin-col})
+		 * \f]
+		 * and rest block_size_col entries col-wise sum of kernel values
+		 * computed as
+		 * \f[
+		 *	v[\text{block-size-row}+j]=\sum_{i}k(i+\text{block-begin-row},
+		 *	j+\text{block-begin-col})
+		 * \f]
+		 * where \f$i\in[0,\text{block-size-row}-1]\f$ and
+		 * \f$j\in[0,\text{block-size-col}-1]\f$
+		 */
+		virtual SGVector<float64_t> row_col_wise_sum_block(
+				index_t block_begin_row, index_t block_begin_col,
+				index_t block_size_row, index_t block_size_col,
+				bool no_diag=false);
+
 		/** get kernel matrix (templated)
 		 *
 		 * @return the kernel matrix
 		 */
 		template <class T> SGMatrix<T> get_kernel_matrix();
-
 
 		/** initialize kernel
 		 *  e.g. setup lhs/rhs of kernel, precompute normalization
@@ -694,6 +852,19 @@ class CKernel : public CSGObject
 		{
 			SG_ERROR("Can't compute derivative wrt %s parameter\n", param->m_name)
 			return SGMatrix<float64_t>();
+		}
+
+		/** return diagonal part of derivative with respect to specified parameter
+		 *
+		 * @param param the parameter
+		 * @param index the index of the element if parameter is a vector
+		 *
+		 * @return diagonal part of gradient with respect to parameter
+		 */
+		virtual SGVector<float64_t> get_parameter_gradient_diagonal(
+				const TParameter* param, index_t index=-1)
+		{
+			return get_parameter_gradient(param,index).get_diagonal_vector();
 		}
 
 		/** Obtains a kernel from a generic SGObject with error checking. Note

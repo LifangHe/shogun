@@ -20,7 +20,8 @@
 #include <shogun/kernel/string/SpectrumRBFKernel.h>
 #include <shogun/features/Features.h>
 #include <shogun/features/StringFeatures.h>
-#include <math.h>
+#include <shogun/lib/SGStringList.h>
+#include <shogun/mathematics/Math.h>
 
 #include <vector>
 #include <string>

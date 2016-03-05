@@ -12,6 +12,7 @@
 #ifdef HAVE_EIGEN3
 
 #include <shogun/lib/SGVector.h>
+#include <shogun/io/SGIO.h>
 #include <shogun/lib/Time.h>
 #include <shogun/mathematics/eigen3.h>
 #include <shogun/mathematics/linalg/linop/LinearOperator.h>

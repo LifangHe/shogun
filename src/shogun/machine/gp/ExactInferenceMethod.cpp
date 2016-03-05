@@ -1,17 +1,36 @@
 /*
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
- * (at your option) any later version.
- *
+ * Copyright (c) The Shogun Machine Learning Toolbox
  * Written (W) 2013 Roman Votyakov
- * Copyright (C) 2012 Jacob Walker
- * Copyright (C) 2013 Roman Votyakov
+ * Written (W) 2012 Jacob Walker
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * The views and conclusions contained in the software and documentation are those
+ * of the authors and should not be interpreted as representing official policies,
+ * either expressed or implied, of the Shogun Development Team.
  *
  * Code adapted from Gaussian Process Machine Learning Toolbox
  * http://www.gaussianprocess.org/gpml/code/matlab/doc/
  */
-
 #include <shogun/machine/gp/ExactInferenceMethod.h>
 
 #ifdef HAVE_EIGEN3
@@ -38,14 +57,31 @@ CExactInferenceMethod::~CExactInferenceMethod()
 {
 }
 
+void CExactInferenceMethod::compute_gradient()
+{
+	CInferenceMethod::compute_gradient();
+
+	if (!m_gradient_update)
+	{
+		update_deriv();
+		update_mean();
+		update_cov();
+		m_gradient_update=true;
+		update_parameter_hash();
+	}
+}
+
 void CExactInferenceMethod::update()
 {
+	SG_DEBUG("entering\n");
+
 	CInferenceMethod::update();
 	update_chol();
 	update_alpha();
-	update_deriv();
-	update_mean();
-	update_cov();
+	m_gradient_update=false;
+	update_parameter_hash();
+
+	SG_DEBUG("leaving\n");
 }
 
 void CExactInferenceMethod::check_members() const
@@ -60,7 +96,7 @@ void CExactInferenceMethod::check_members() const
 
 SGVector<float64_t> CExactInferenceMethod::get_diagonal_vector()
 {
-	if (update_parameter_hash())
+	if (parameter_hash_changed())
 		update();
 
 	// get the sigma variable from the Gaussian likelihood model
@@ -77,7 +113,7 @@ SGVector<float64_t> CExactInferenceMethod::get_diagonal_vector()
 
 float64_t CExactInferenceMethod::get_negative_log_marginal_likelihood()
 {
-	if (update_parameter_hash())
+	if (parameter_hash_changed())
 		update();
 
 	// get the sigma variable from the Gaussian likelihood model
@@ -106,7 +142,7 @@ float64_t CExactInferenceMethod::get_negative_log_marginal_likelihood()
 
 SGVector<float64_t> CExactInferenceMethod::get_alpha()
 {
-	if (update_parameter_hash())
+	if (parameter_hash_changed())
 		update();
 
 	return SGVector<float64_t>(m_alpha);
@@ -114,7 +150,7 @@ SGVector<float64_t> CExactInferenceMethod::get_alpha()
 
 SGMatrix<float64_t> CExactInferenceMethod::get_cholesky()
 {
-	if (update_parameter_hash())
+	if (parameter_hash_changed())
 		update();
 
 	return SGMatrix<float64_t>(m_L);
@@ -122,16 +158,14 @@ SGMatrix<float64_t> CExactInferenceMethod::get_cholesky()
 
 SGVector<float64_t> CExactInferenceMethod::get_posterior_mean()
 {
-	if (update_parameter_hash())
-		update();
+	compute_gradient();
 
 	return SGVector<float64_t>(m_mu);
 }
 
 SGMatrix<float64_t> CExactInferenceMethod::get_posterior_covariance()
 {
-	if (update_parameter_hash())
-		update();
+	compute_gradient();
 
 	return SGMatrix<float64_t>(m_Sigma);
 }
@@ -150,7 +184,7 @@ void CExactInferenceMethod::update_chol()
 	/* creates views on kernel and cholesky matrix and perform cholesky */
 	Map<MatrixXd> K(m_ktrtr.matrix, m_ktrtr.num_rows, m_ktrtr.num_cols);
 	Map<MatrixXd> L(m_L.matrix, m_ktrtr.num_rows, m_ktrtr.num_cols);
-	LLT<MatrixXd> llt(K*(CMath::sq(m_scale)/CMath::sq(sigma))+
+	LLT<MatrixXd> llt(K*(CMath::exp(m_log_scale*2.0)/CMath::sq(sigma))+
 		MatrixXd::Identity(m_ktrtr.num_rows, m_ktrtr.num_cols));
 	L=llt.matrixU();
 }
@@ -194,8 +228,7 @@ void CExactInferenceMethod::update_mean()
 	m_mu=SGVector<float64_t>(m.vlen);
 	Map<VectorXd> eigen_mu(m_mu.vector, m_mu.vlen);
 
-	// compute mean: mu=K'*alpha+m
-	eigen_mu=eigen_K*CMath::sq(m_scale)*eigen_alpha+eigen_m;
+	eigen_mu=eigen_K*CMath::exp(m_log_scale*2.0)*eigen_alpha;
 }
 
 void CExactInferenceMethod::update_cov()
@@ -211,10 +244,15 @@ void CExactInferenceMethod::update_cov()
 
 	// compute V = L^(-1) * K, using upper triangular factor L^T
 	MatrixXd eigen_V=eigen_L.triangularView<Upper>().adjoint().solve(
-			eigen_K*CMath::sq(m_scale));
+			eigen_K*CMath::exp(m_log_scale*2.0));
+
+	CGaussianLikelihood* lik=CGaussianLikelihood::obtain_from_generic(m_model);
+	float64_t sigma=lik->get_sigma();
+	SG_UNREF(lik);
+	eigen_V = eigen_V/sigma;
 
 	// compute covariance matrix of the posterior: Sigma = K - V^T * V
-	eigen_Sigma=eigen_K*CMath::sq(m_scale)-eigen_V.adjoint()*eigen_V;
+	eigen_Sigma=eigen_K*CMath::exp(m_log_scale*2.0)-eigen_V.adjoint()*eigen_V;
 }
 
 void CExactInferenceMethod::update_deriv()
@@ -246,7 +284,7 @@ void CExactInferenceMethod::update_deriv()
 SGVector<float64_t> CExactInferenceMethod::get_derivative_wrt_inference_method(
 		const TParameter* param)
 {
-	REQUIRE(!strcmp(param->m_name, "scale"), "Can't compute derivative of "
+	REQUIRE(!strcmp(param->m_name, "log_scale"), "Can't compute derivative of "
 			"the nagative log marginal likelihood wrt %s.%s parameter\n",
 			get_name(), param->m_name)
 
@@ -256,15 +294,29 @@ SGVector<float64_t> CExactInferenceMethod::get_derivative_wrt_inference_method(
 	SGVector<float64_t> result(1);
 
 	// compute derivative wrt kernel scale: dnlZ=sum(Q.*K*scale*2)/2
-	result[0]=(eigen_Q.cwiseProduct(eigen_K)*m_scale*2.0).sum()/2.0;
+	result[0]=(eigen_Q.cwiseProduct(eigen_K)).sum();
+	result[0]*=CMath::exp(m_log_scale*2.0);
 
 	return result;
+}
+
+CExactInferenceMethod* CExactInferenceMethod::obtain_from_generic(
+		CInferenceMethod* inference)
+{
+	if (inference==NULL)
+		return NULL;
+
+	if (inference->get_inference_type()!=INF_EXACT)
+		SG_SERROR("Provided inference is not of type CExactInferenceMethod!\n")
+
+	SG_REF(inference);
+	return (CExactInferenceMethod*)inference;
 }
 
 SGVector<float64_t> CExactInferenceMethod::get_derivative_wrt_likelihood_model(
 		const TParameter* param)
 {
-	REQUIRE(!strcmp(param->m_name, "sigma"), "Can't compute derivative of "
+	REQUIRE(!strcmp(param->m_name, "log_sigma"), "Can't compute derivative of "
 			"the nagative log marginal likelihood wrt %s.%s parameter\n",
 			m_model->get_name(), param->m_name)
 
@@ -291,19 +343,10 @@ SGVector<float64_t> CExactInferenceMethod::get_derivative_wrt_kernel(
 	// create eigen representation of the matrix Q
 	Map<MatrixXd> eigen_Q(m_Q.matrix, m_Q.num_rows, m_Q.num_cols);
 
+	REQUIRE(param, "Param not set\n");
 	SGVector<float64_t> result;
-
-	if (param->m_datatype.m_ctype==CT_VECTOR ||
-			param->m_datatype.m_ctype==CT_SGVECTOR)
-	{
-		REQUIRE(param->m_datatype.m_length_y,
-				"Length of the parameter %s should not be NULL\n", param->m_name)
-		result=SGVector<float64_t>(*(param->m_datatype.m_length_y));
-	}
-	else
-	{
-		result=SGVector<float64_t>(1);
-	}
+	int64_t len=const_cast<TParameter *>(param)->m_datatype.get_num_elements();
+	result=SGVector<float64_t>(len);
 
 	for (index_t i=0; i<result.vlen; i++)
 	{
@@ -317,7 +360,8 @@ SGVector<float64_t> CExactInferenceMethod::get_derivative_wrt_kernel(
 		Map<MatrixXd> eigen_dK(dK.matrix, dK.num_rows, dK.num_cols);
 
 		// compute derivative wrt kernel parameter: dnlZ=sum(Q.*dK*scale)/2.0
-		result[i]=(eigen_Q.cwiseProduct(eigen_dK)*CMath::sq(m_scale)).sum()/2.0;
+		result[i]=(eigen_Q.cwiseProduct(eigen_dK)).sum();
+		result[i]*=CMath::exp(m_log_scale*2.0)/2.0;
 	}
 
 	return result;
@@ -329,20 +373,10 @@ SGVector<float64_t> CExactInferenceMethod::get_derivative_wrt_mean(
 	// create eigen representation of alpha vector
 	Map<VectorXd> eigen_alpha(m_alpha.vector, m_alpha.vlen);
 
+	REQUIRE(param, "Param not set\n");
 	SGVector<float64_t> result;
-
-	if (param->m_datatype.m_ctype==CT_VECTOR ||
-			param->m_datatype.m_ctype==CT_SGVECTOR)
-	{
-		REQUIRE(param->m_datatype.m_length_y,
-				"Length of the parameter %s should not be NULL\n", param->m_name)
-
-		result=SGVector<float64_t>(*(param->m_datatype.m_length_y));
-	}
-	else
-	{
-		result=SGVector<float64_t>(1);
-	}
+	int64_t len=const_cast<TParameter *>(param)->m_datatype.get_num_elements();
+	result=SGVector<float64_t>(len);
 
 	for (index_t i=0; i<result.vlen; i++)
 	{

@@ -14,7 +14,6 @@
 #include <shogun/lib/config.h>
 
 #ifdef HAVE_EIGEN3
-#ifdef HAVE_LAPACK
 
 #include <shogun/base/SGObject.h>
 #include <shogun/distance/CustomMahalanobisDistance.h>
@@ -134,7 +133,7 @@ class CLMNN : public CSGObject
 
 		/** set maximum number of iterations
 		 *
-		 * @param maximum number of iterations to set
+		 * @param maxiter maximum number of iterations to set
 		 */
 		void set_maxiter(const uint32_t maxiter);
 
@@ -297,7 +296,6 @@ class CLMNNStatistics : public CSGObject
 
 } /* namespace shogun */
 
-#endif /* HAVE_LAPACK */
 #endif /* HAVE_EIGEN3 */
 
 #endif /* LMNN_H_ */

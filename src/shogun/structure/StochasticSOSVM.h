@@ -11,7 +11,8 @@
 #ifndef __STOCHASTIC_SOSVM_H__
 #define __STOCHASTIC_SOSVM_H__
 
-#include <shogun/lib/SGVector.h>
+#include <shogun/lib/config.h>
+
 #include <shogun/machine/LinearStructuredOutputMachine.h>
 
 namespace shogun
@@ -52,7 +53,7 @@ public:
 
 	/** get classifier type
 	 *
-	 * @return classifier type CT_PRIMALMOSEKSOSVM
+	 * @return classifier type CT_STOCHASTICSOSVM
 	 */
 	virtual EMachineType get_classifier_type();
 

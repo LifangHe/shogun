@@ -11,6 +11,8 @@
 #ifndef DIMENSIONREDUCTIONPREPROCESSOR_H_
 #define DIMENSIONREDUCTIONPREPROCESSOR_H_
 
+#include <shogun/lib/config.h>
+
 #include <shogun/preprocessor/DensePreprocessor.h>
 #include <shogun/converter/EmbeddingConverter.h>
 #include <shogun/features/Features.h>
@@ -105,10 +107,10 @@ public:
 	 */
 	CKernel* get_kernel() const;
 
-protected:
+private:
 
 	/** default init */
-	void init();
+	void initialize_parameters();
 
 protected:
 

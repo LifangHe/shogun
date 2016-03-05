@@ -10,9 +10,11 @@
 #ifndef DIRECTOR_STRUCTURED_MODEL_H_
 #define DIRECTOR_STRUCTURED_MODEL_H_
 
+#include <shogun/lib/config.h>
+
 #ifdef USE_SWIG_DIRECTORS
 #include <shogun/structure/StructuredModel.h>
-#include <shogun/lib/config.h>
+
 namespace shogun
 {
 
@@ -102,7 +104,7 @@ IGNORE_IN_CLASSLIST class CDirectorStructuredModel : public CStructuredModel
 				float64_t regularization,
 				SGMatrix< float64_t > & A,  SGVector< float64_t > a,
 				SGMatrix< float64_t > B,  SGVector< float64_t > & b,
-				SGVector< float64_t > lb, SGVector< float64_t > ub,
+				SGVector< float64_t > & lb, SGVector< float64_t > & ub,
 				SGMatrix < float64_t > & C);
 
 		/** @return name of SGSerializable */

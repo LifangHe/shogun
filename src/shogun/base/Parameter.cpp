@@ -16,6 +16,16 @@
 #include <shogun/lib/Hash.h>
 #include <shogun/lib/memory.h>
 #include <shogun/io/SGIO.h>
+#include <shogun/mathematics/Math.h>
+#include <shogun/lib/common.h>
+#include <shogun/lib/DataType.h>
+
+#include <shogun/lib/SGString.h>
+#include <shogun/lib/SGVector.h>
+#include <shogun/lib/SGSparseVector.h>
+#include <shogun/lib/SGMatrix.h>
+#include <shogun/lib/SGSparseMatrix.h>
+#include <shogun/io/SerializableFile.h>
 
 using namespace shogun;
 
@@ -1776,49 +1786,12 @@ TParameter::TParameter(const TSGDataType* datatype, void* parameter,
 	m_parameter = parameter;
 	m_name = get_strdup(name);
 	m_description = get_strdup(description);
-	m_delete_data=false;
-	m_was_allocated_from_scratch=false;
 }
 
 TParameter::~TParameter()
 {
-//	SG_SDEBUG("entering ~TParameter for \"%s\"\n", m_name)
 	SG_FREE(m_description);
 	SG_FREE(m_name);
-
-	/* possibly delete content, m_parameter variable */
-	if (m_was_allocated_from_scratch)
-	{
-		SG_SDEBUG("deleting from scratch data\n")
-
-		if (m_delete_data)
-		{
-			/* for non-scalar data, delete_cont does the job, rest is handled
-			 * below */
-			SG_SDEBUG("deleting pure data\n")
-			if (m_datatype.m_ctype!=CT_SCALAR)
-				delete_cont();
-
-			if (m_datatype.m_ctype==CT_SCALAR && m_datatype.m_ptype==PT_SGOBJECT)
-				SG_UNREF(*(CSGObject**)m_parameter);
-		}
-
-		/* free pointer/data */
-		if (m_parameter)
-		{
-			SG_SDEBUG("freeing m_parameter pointer/data at %p\n", m_parameter)
-			SG_FREE(m_parameter);
-		}
-
-		/* free lengths */
-		if (m_datatype.m_length_x)
-			SG_FREE(m_datatype.m_length_x);
-
-		if (m_datatype.m_length_y)
-			SG_FREE(m_datatype.m_length_y);
-	}
-
-//	SG_SDEBUG("leaving ~TParameter\n")
 }
 
 char*
@@ -2025,7 +1998,7 @@ TParameter::new_cont(SGVector<index_t> dims)
 {
 	char* s=SG_MALLOC(char, 200);
 	m_datatype.to_string(s, 200);
-	SG_SDEBUG("entering TParameter::new_cont for \"%s\" of type %s with",
+	SG_SDEBUG("entering TParameter::new_cont for \"%s\" of type %s\n",
 			s, m_name ? m_name : "(nil)");
 	SG_FREE(s);
 	delete_cont();
@@ -2638,6 +2611,8 @@ TParameter::save(CSerializableFile* file, const char* prefix)
 bool
 TParameter::load(CSerializableFile* file, const char* prefix)
 {
+	REQUIRE(file != NULL, "Serializable file object should be != NULL\n");
+
 	const int32_t buflen=100;
 	char* buf=SG_MALLOC(char, buflen);
 	m_datatype.to_string(buf, buflen);
@@ -2739,7 +2714,11 @@ TParameter::load(CSerializableFile* file, const char* prefix)
 	return true;
 }
 
-Parameter::Parameter()
+/*
+  Initializing m_params(1) with small preallocation-size, because Parameter
+  will be constructed several times for EACH SGObject instance.
+ */
+Parameter::Parameter() : m_params(1)
 {
 	SG_REF(sg_io);
 }
@@ -2798,15 +2777,15 @@ Parameter::save(CSerializableFile* file, const char* prefix)
 	return true;
 }
 
-//bool
-//Parameter::load(CSerializableFile* file, const char* prefix)
-//{
-//	for (int32_t i=0; i<get_num_parameters(); i++)
-//		if (!m_params.get_element(i)->load(file, prefix))
-//			return false;
-//
-//	return true;
-//}
+bool
+Parameter::load(CSerializableFile* file, const char* prefix)
+{
+	for (int32_t i=0; i<get_num_parameters(); i++)
+		if (!m_params.get_element(i)->load(file, prefix))
+			return false;
+
+	return true;
+}
 
 void Parameter::set_from_parameters(Parameter* params)
 {
@@ -2980,156 +2959,7 @@ bool TParameter::operator>(const TParameter& other) const
 	return strcmp(m_name, other.m_name)>0;
 }
 
-void TParameter::allocate_data_from_scratch(SGVector<index_t> dims,
-		bool new_cont_call)
-{
-	SG_SDEBUG("entering TParameter::allocate_data_from_scratch of "
-			"\"%s\"\n", m_name);
-
-	/* set flag to delete all this stuff later on */
-	m_was_allocated_from_scratch=true;
-
-	/* length has to be allocated for matrices/vectors */
-	switch (m_datatype.m_ctype)
-	{
-	case CT_VECTOR: case CT_SGVECTOR:
-		m_datatype.m_length_y=SG_MALLOC(index_t, 1);
-		*m_datatype.m_length_y=dims[1];
-		break;
-	case CT_MATRIX: case CT_SGMATRIX:
-		m_datatype.m_length_x=SG_MALLOC(index_t, 1);
-		m_datatype.m_length_y=SG_MALLOC(index_t, 1);
-		*m_datatype.m_length_y=dims[1];
-		*m_datatype.m_length_x=dims[0];
-		break;
-	case CT_SCALAR:
-		m_datatype.m_length_x=NULL;
-		m_datatype.m_length_y=NULL;
-		break;
-	case CT_NDARRAY:
-		SG_SNOTIMPLEMENTED
-		break;
-	case CT_UNDEFINED: default:
-		SG_SERROR("Implementation error: undefined container type\n");
-		break;
-	}
-
-	/* check if there is no data loss */
-	if (m_parameter)
-		SG_SERROR("TParameter::allocate_data_from_scratch must not be called "
-				"when the underlying TParameter instance already has data.\n");
-
-	/* scalars are treated differently than vectors/matrices. memory has to
-	 * be allocated for the data itself */
-	if (m_datatype.m_ctype==CT_SCALAR)
-	{
-		/* sgobjects are treated differently than the rest */
-		if (m_datatype.m_ptype!=PT_SGOBJECT)
-		{
-			/* for non-sgobject allocate memory because normally they are on
-			 * stack and excluded in the TParameter data allocation.
-			 * Will be deleted by the TParameter destructor */
-			m_parameter=SG_MALLOC(char, m_datatype.get_size());
-		}
-		else
-		{
-			/* for sgobjects, allocate memory for pointer and set to NULL
-			 * Will be deleted by the TParameter destructor */
-			m_parameter=SG_MALLOC(CSGObject**, 1);
-			*((CSGObject**)m_parameter)=NULL;
-		}
-	}
-	else
-	{
-		/* allocate pointer for data pointer */
-		void** data_p=SG_MALLOC(void*, 1);
-		*data_p=NULL;
-
-		/* allocate dummy data at the point the above pointer points to
-		 * will be freed by the delete_cont() method of TParameter.
-		 * This is needed because new_cont/delete_cont cannot handle
-		 * non-existing data. Set to NULL to avoid problems */
-		if (new_cont_call)
-		{
-			*data_p=SG_MALLOC(void**, 1);
-			**(void***)data_p=NULL;
-		}
-
-		m_parameter=data_p;
-
-		/* perform one data allocation. This may be repeated and therefore
-		 * redundant if load() is called afterwards, however, if one wants
-		 * to write directly to the array data after this call, it is
-		 * necessary */
-		if (new_cont_call)
-			new_cont(dims);
-	}
-
-	SG_SDEBUG("leaving TParameter::allocate_data_from_scratch of "
-				"\"%s\"\n", m_name);
-}
-
-void TParameter::copy_data(const TParameter* source)
-{
-	SG_SDEBUG("entering TParameter::copy_data for %s\n", m_name)
-
-	/* assert that type is equal */
-	ASSERT(m_datatype.m_ctype==source->m_datatype.m_ctype)
-	ASSERT(m_datatype.m_stype==source->m_datatype.m_stype)
-	ASSERT(m_datatype.m_ptype==source->m_datatype.m_ptype)
-
-	/* first delete old data if non-scalar */
-	if (m_datatype.m_ctype!=CT_SCALAR)
-		delete_cont();
-
-	/* then copy data in case of numeric scalars, or pointer to data else */
-	if (m_datatype.m_ctype==CT_SCALAR && m_datatype.m_ptype!=PT_SGOBJECT)
-	{
-		/* just copy value behind pointer */
-		SG_SDEBUG("Copying scalar data of size %d from %p to %p\n",
-				m_datatype.get_size(), source->m_parameter, m_parameter);
-		memcpy(m_parameter, source->m_parameter,
-				m_datatype.get_size());
-	}
-	else
-	{
-		/* if this is a sgobject, the old one has to be unrefed */
-		if (m_datatype.m_ptype==PT_SGOBJECT)
-		{
-			if (m_datatype.m_ctype==CT_SCALAR)
-			{
-				SG_UNREF(*((CSGObject**)m_parameter));
-			}
-			else
-			{
-				int32_t length=1;
-				length*=m_datatype.m_length_x ? *m_datatype.m_length_x : 1;
-				length*=m_datatype.m_length_y ? *m_datatype.m_length_y : 1;
-
-				for (index_t j=0; j<length; ++j)
-				{
-					SG_UNREF(((CSGObject**)(m_parameter))[j]);
-				}
-			}
-		}
-
-		/* in this case, data is a pointer pointing to the actual
-		 * data, so copy pointer if non-NULL*/
-		SG_SDEBUG("Copying non-scalar pointer %p\n", *((void**)source->m_parameter))
-		*((void**)m_parameter)=*((void**)source->m_parameter);
-	}
-
-	/* copy lengths */
-	if (source->m_datatype.m_length_x)
-		*m_datatype.m_length_x=*source->m_datatype.m_length_x;
-
-	if (source->m_datatype.m_length_y)
-		*m_datatype.m_length_y=*source->m_datatype.m_length_y;
-
-	SG_SDEBUG("leaving TParameter::copy_data for %s\n", m_name)
-}
-
-bool TParameter::equals(TParameter* other, float64_t accuracy)
+bool TParameter::equals(TParameter* other, float64_t accuracy, bool tolerant)
 {
 	SG_SDEBUG("entering TParameter::equals()\n");
 
@@ -3177,9 +3007,9 @@ bool TParameter::equals(TParameter* other, float64_t accuracy)
 			if (!TParameter::compare_stype(m_datatype.m_stype,
 					m_datatype.m_ptype, m_parameter,
 					other->m_parameter,
-					accuracy))
+					accuracy, tolerant))
 			{
-				SG_SDEBUG("leaving TParameter::equals(): scalar data differes\n");
+				SG_SDEBUG("leaving TParameter::equals(): scalar data differs\n");
 				return false;
 			}
 			break;
@@ -3193,17 +3023,18 @@ bool TParameter::equals(TParameter* other, float64_t accuracy)
 			SG_SDEBUG("length_y: %d\n", *m_datatype.m_length_y)
 			for (index_t i=0; i<*m_datatype.m_length_y; ++i)
 			{
-				SG_SDEBUG("comparing element %d which is %d byes from start\n",
+				SG_SDEBUG("comparing element %d which is %d bytes from start\n",
 						i, x);
 
 				void* pointer_a=&((*(char**)m_parameter)[x]);
 				void* pointer_b=&((*(char**)other->m_parameter)[x]);
 
 				if (!TParameter::compare_stype(m_datatype.m_stype,
-						m_datatype.m_ptype, pointer_a, pointer_b, accuracy))
+						m_datatype.m_ptype, pointer_a, pointer_b,
+						accuracy, tolerant))
 				{
 					SG_SDEBUG("leaving TParameter::equals(): vector element "
-							"differes\n");
+							"differs\n");
 					return false;
 				}
 
@@ -3233,17 +3064,18 @@ bool TParameter::equals(TParameter* other, float64_t accuracy)
 
 			for (index_t i=0; i<length; ++i)
 			{
-				SG_SDEBUG("comparing element %d which is %d byes from start\n",
+				SG_SDEBUG("comparing element %d which is %d bytes from start\n",
 						i, x);
 
 				void* pointer_a=&((*(char**)m_parameter)[x]);
 				void* pointer_b=&((*(char**)other->m_parameter)[x]);
 
 				if (!TParameter::compare_stype(m_datatype.m_stype,
-						m_datatype.m_ptype, pointer_a, pointer_b, accuracy))
+						m_datatype.m_ptype, pointer_a, pointer_b,
+						accuracy, tolerant))
 				{
 					SG_SDEBUG("leaving TParameter::equals(): vector element "
-							"differes\n");
+							"differs\n");
 					return false;
 				}
 
@@ -3273,13 +3105,13 @@ bool TParameter::equals(TParameter* other, float64_t accuracy)
 }
 
 bool TParameter::compare_ptype(EPrimitiveType ptype, void* data1, void* data2,
-			floatmax_t accuracy)
+			float64_t accuracy, bool tolerant)
 {
 	SG_SDEBUG("entering TParameter::compare_ptype()\n");
 
 	if ((data1 && !data2) || (!data1 && data2))
 	{
-		SG_SDEBUG("leaving TParameter::compare_ptype(): data1 is at %p while "
+		SG_SINFO("leaving TParameter::compare_ptype(): data1 is at %p while "
 				"data2 is at %p\n", data1, data2);
 		return false;
 	}
@@ -3300,7 +3132,7 @@ bool TParameter::compare_ptype(EPrimitiveType ptype, void* data1, void* data2,
 
 		if (CMath::abs(casted1-casted2)>accuracy)
 		{
-			SG_SDEBUG("leaving TParameter::compare_ptype(): PT_BOOL: "
+			SG_SINFO("leaving TParameter::compare_ptype(): PT_BOOL: "
 					"data1=%d, data2=%d\n", casted1, casted2);
 			return false;
 		}
@@ -3313,7 +3145,7 @@ bool TParameter::compare_ptype(EPrimitiveType ptype, void* data1, void* data2,
 
 		if (CMath::abs(casted1-casted2)>accuracy)
 		{
-			SG_SDEBUG("leaving TParameter::compare_ptype(): PT_CHAR: "
+			SG_SINFO("leaving TParameter::compare_ptype(): PT_CHAR: "
 					"data1=%c, data2=%c\n", casted1, casted2);
 			return false;
 		}
@@ -3326,7 +3158,7 @@ bool TParameter::compare_ptype(EPrimitiveType ptype, void* data1, void* data2,
 
 		if (CMath::abs(casted1-casted2)>accuracy)
 		{
-			SG_SDEBUG("leaving TParameter::compare_ptype(): PT_INT8: "
+			SG_SINFO("leaving TParameter::compare_ptype(): PT_INT8: "
 					"data1=%d, data2=%d\n", casted1, casted2);
 			return false;
 		}
@@ -3339,7 +3171,7 @@ bool TParameter::compare_ptype(EPrimitiveType ptype, void* data1, void* data2,
 
 		if (CMath::abs(casted1-casted2)>accuracy)
 		{
-			SG_SDEBUG("leaving TParameter::compare_ptype(): PT_UINT8: "
+			SG_SINFO("leaving TParameter::compare_ptype(): PT_UINT8: "
 					"data1=%d, data2=%d\n", casted1, casted2);
 			return false;
 		}
@@ -3352,7 +3184,7 @@ bool TParameter::compare_ptype(EPrimitiveType ptype, void* data1, void* data2,
 
 		if (CMath::abs(casted1-casted2)>accuracy)
 		{
-			SG_SDEBUG("leaving TParameter::compare_ptype(): PT_INT16: "
+			SG_SINFO("leaving TParameter::compare_ptype(): PT_INT16: "
 					"data1=%d, data2=%d\n", casted1, casted2);
 			return false;
 		}
@@ -3365,7 +3197,7 @@ bool TParameter::compare_ptype(EPrimitiveType ptype, void* data1, void* data2,
 
 		if (CMath::abs(casted1-casted2)>accuracy)
 		{
-			SG_SDEBUG("leaving TParameter::compare_ptype(): PT_UINT16: "
+			SG_SINFO("leaving TParameter::compare_ptype(): PT_UINT16: "
 					"data1=%d, data2=%d\n", casted1, casted2);
 			return false;
 		}
@@ -3378,7 +3210,7 @@ bool TParameter::compare_ptype(EPrimitiveType ptype, void* data1, void* data2,
 
 		if (CMath::abs(casted1-casted2)>accuracy)
 		{
-			SG_SDEBUG("leaving TParameter::compare_ptype(): PT_INT32: "
+			SG_SINFO("leaving TParameter::compare_ptype(): PT_INT32: "
 					"data1=%d, data2=%d\n", casted1, casted2);
 			return false;
 		}
@@ -3391,7 +3223,7 @@ bool TParameter::compare_ptype(EPrimitiveType ptype, void* data1, void* data2,
 
 		if (CMath::abs(casted1-casted2)>accuracy)
 		{
-			SG_SDEBUG("leaving TParameter::compare_ptype(): PT_UINT32: "
+			SG_SINFO("leaving TParameter::compare_ptype(): PT_UINT32: "
 					"data1=%d, data2=%d\n", casted1, casted2);
 			return false;
 		}
@@ -3404,7 +3236,7 @@ bool TParameter::compare_ptype(EPrimitiveType ptype, void* data1, void* data2,
 
 		if (CMath::abs(casted1-casted2)>accuracy)
 		{
-			SG_SDEBUG("leaving TParameter::compare_ptype(): PT_INT64: "
+			SG_SINFO("leaving TParameter::compare_ptype(): PT_INT64: "
 					"data1=%d, data2=%d\n", casted1, casted2);
 			return false;
 		}
@@ -3417,7 +3249,7 @@ bool TParameter::compare_ptype(EPrimitiveType ptype, void* data1, void* data2,
 
 		if (CMath::abs(casted1-casted2)>accuracy)
 		{
-			SG_SDEBUG("leaving TParameter::compare_ptype(): PT_UINT64: "
+			SG_SINFO("leaving TParameter::compare_ptype(): PT_UINT64: "
 					"data1=%d, data2=%d\n", casted1, casted2);
 			return false;
 		}
@@ -3428,12 +3260,10 @@ bool TParameter::compare_ptype(EPrimitiveType ptype, void* data1, void* data2,
 		float32_t casted1=*((float32_t*)data1);
 		float32_t casted2=*((float32_t*)data2);
 
-		if (CMath::abs(casted1-casted2)>accuracy)
-		{
-			SG_SDEBUG("leaving TParameter::compare_ptype(): PT_FLOAT32: "
-					"data1=%f, data2=%f\n", casted1, casted2);
-			return false;
-		}
+		SG_SINFO("leaving TParameter::compare_ptype(): PT_FLOAT32: "
+				"data1=%f, data2=%f\n", casted1, casted2);
+
+		return CMath::fequals<float32_t>(casted1, casted2, accuracy, tolerant);
 		break;
 	}
 	case PT_FLOAT64:
@@ -3441,24 +3271,21 @@ bool TParameter::compare_ptype(EPrimitiveType ptype, void* data1, void* data2,
 		float64_t casted1=*((float64_t*)data1);
 		float64_t casted2=*((float64_t*)data2);
 
-		if (CMath::abs(casted1-casted2)>accuracy)
-		{
-			SG_SDEBUG("leaving TParameter::compare_ptype(): PT_FLOAT64: "
-					"data1=%f, data2=%f\n", casted1, casted2);
-			return false;
-		}
+		SG_SINFO("leaving TParameter::compare_ptype(): PT_FLOAT64: "
+				"data1=%f, data2=%f\n", casted1, casted2);
+
+		return CMath::fequals<float64_t>(casted1, casted2, accuracy, tolerant);
 		break;
 	}
 	case PT_FLOATMAX:
 	{
 		floatmax_t casted1=*((floatmax_t*)data1);
 		floatmax_t casted2=*((floatmax_t*)data2);
-		if (CMath::abs(casted1-casted2)>accuracy)
-		{
-			SG_SDEBUG("leaving TParameter::compare_ptype(): PT_FLOATMAX: "
-					"data1=%f, data2=%f\n", casted1, casted2);
-			return false;
-		}
+
+		SG_SINFO("leaving TParameter::compare_ptype(): PT_FLOATMAX: "
+				"data1=%f, data2=%f\n", casted1, casted2);
+
+		return CMath::fequals<floatmax_t>(casted1, casted2, accuracy, tolerant);
 		break;
 	}
 	case PT_COMPLEX128:
@@ -3470,7 +3297,7 @@ bool TParameter::compare_ptype(EPrimitiveType ptype, void* data1, void* data2,
 		if (CMath::abs(casted1_real-casted2_real)>accuracy ||
 			CMath::abs(casted1_imag-casted2_imag)>accuracy)
 		{
-			SG_SDEBUG("leaving TParameter::compare_ptype(): PT_COMPLEX128: "
+			SG_SINFO("leaving TParameter::compare_ptype(): PT_COMPLEX128: "
 					"data1=%f+i%f, data2=%f+i%f\n",
 					casted1_real, casted1_imag,
 					casted2_real, casted2_imag);
@@ -3495,7 +3322,7 @@ bool TParameter::compare_ptype(EPrimitiveType ptype, void* data1, void* data2,
 		{
 			if (!(casted1->equals(casted2, accuracy)))
 			{
-				SG_SDEBUG("leaving TParameter::compare_ptype(): PT_SGOBJECT "
+				SG_SINFO("leaving TParameter::compare_ptype(): PT_SGOBJECT "
 						"equals returned false\n");
 				return false;
 			}
@@ -3504,7 +3331,7 @@ bool TParameter::compare_ptype(EPrimitiveType ptype, void* data1, void* data2,
 		{
 			if (!(casted2->equals(casted1, accuracy)))
 			{
-				SG_SDEBUG("leaving TParameter::compare_ptype(): PT_SGOBJECT "
+				SG_SINFO("leaving TParameter::compare_ptype(): PT_SGOBJECT "
 						"equals returned false\n");
 				return false;
 			}
@@ -3667,7 +3494,7 @@ bool TParameter::copy_ptype(EPrimitiveType ptype, void* source, void* target)
 }
 
 bool TParameter::compare_stype(EStructType stype, EPrimitiveType ptype,
-		void* data1, void* data2, floatmax_t accuracy)
+		void* data1, void* data2, float64_t accuracy, bool tolerant)
 {
 	SG_SDEBUG("entering TParameter::compare_stype()\n");
 
@@ -3683,7 +3510,7 @@ bool TParameter::compare_stype(EStructType stype, EPrimitiveType ptype,
 	/* If one is NULL, data are not equal */
 	if ((data1 && !data2) || (!data1 && data2))
 	{
-		SG_SDEBUG("leaving TParameter::compare_stype(): data1 is at %p while "
+		SG_SINFO("leaving TParameter::compare_stype(): data1 is at %p while "
 				"data2 is at %p\n", data1, data2);
 		return false;
 	}
@@ -3693,7 +3520,7 @@ bool TParameter::compare_stype(EStructType stype, EPrimitiveType ptype,
 		case ST_NONE:
 		{
 			SG_SDEBUG("ST_NONE\n");
-			return TParameter::compare_ptype(ptype, data1, data2, accuracy);
+			return TParameter::compare_ptype(ptype, data1, data2, accuracy, tolerant);
 			break;
 		}
 		case ST_SPARSE:
@@ -3704,7 +3531,7 @@ bool TParameter::compare_stype(EStructType stype, EPrimitiveType ptype,
 
 			if (spr_ptr1->num_feat_entries != spr_ptr2->num_feat_entries)
 			{
-				SG_SDEBUG("leaving TParameter::compare_stype(): Length of "
+				SG_SINFO("leaving TParameter::compare_stype(): Length of "
 						"sparse vector1 (%d)  is different of vector 2 (%d)\n",
 						spr_ptr1->num_feat_entries, spr_ptr2->num_feat_entries);
 				return false;
@@ -3732,9 +3559,9 @@ bool TParameter::compare_stype(EStructType stype, EPrimitiveType ptype,
 				void* pointer2=&(cur2->entry)-char_offset+ptype_offset;
 
 				if (!TParameter::compare_ptype(ptype, pointer1,
-						pointer2, accuracy))
+						pointer2, accuracy, tolerant))
 				{
-					SG_SDEBUG("leaving TParameter::compare_stype(): Data of"
+					SG_SINFO("leaving TParameter::compare_stype(): Data of"
 							" sparse vector element is different\n");
 					return false;
 				}
@@ -3742,7 +3569,7 @@ bool TParameter::compare_stype(EStructType stype, EPrimitiveType ptype,
 				/* also compare feature indices */
 				if (cur2->feat_index!=cur1->feat_index)
 				{
-					SG_SDEBUG("leaving TParameter::compare_stype(): Feature "
+					SG_SINFO("leaving TParameter::compare_stype(): Feature "
 							"index of sparse vector element is different. "
 							"source: %d, target: %d\n",
 							cur1->feat_index, cur2->feat_index);
@@ -3759,7 +3586,7 @@ bool TParameter::compare_stype(EStructType stype, EPrimitiveType ptype,
 
 			if (str_ptr1->slen != str_ptr2->slen)
 			{
-				SG_SDEBUG("leaving TParameter::compare_stype(): Length of "
+				SG_SINFO("leaving TParameter::compare_stype(): Length of "
 						"string1 (%d)  is different of string2 (%d)\n",
 						str_ptr1->slen, str_ptr2->slen);
 				return false;
@@ -3774,9 +3601,9 @@ bool TParameter::compare_stype(EStructType stype, EPrimitiveType ptype,
 				void* pointer2=str_ptr2->string+i*size_ptype;
 
 				if (!TParameter::compare_ptype(ptype, pointer1,
-						pointer2, accuracy))
+						pointer2, accuracy, tolerant))
 				{
-					SG_SDEBUG("leaving TParameter::compare_stype(): Data of"
+					SG_SINFO("leaving TParameter::compare_stype(): Data of"
 							" string element is different\n");
 					return false;
 				}
@@ -4012,7 +3839,12 @@ bool TParameter::copy(TParameter* target)
 			{
 				size_t num_bytes=*m_datatype.m_length_y * m_datatype.sizeof_stype();
 				SG_SDEBUG("allocating %d bytes memory for target vector\n", num_bytes);
+
 				*(char**)target->m_parameter=SG_MALLOC(char, num_bytes);
+				/* check whether ptype is SGOBJECT, if yes we need to initialize
+				   the memory with NULL for the way copy_ptype handles it */
+				if (m_datatype.m_ptype==PT_SGOBJECT)
+					memset(*(void**)target->m_parameter, 0, num_bytes);
 
 				/* use length of source */
 				*target->m_datatype.m_length_y=*m_datatype.m_length_y;
@@ -4069,12 +3901,20 @@ bool TParameter::copy(TParameter* target)
 					num_bytes=*m_datatype.m_length_y * m_datatype.sizeof_stype();
 				else
 					num_bytes=*m_datatype.m_length_y *
-						(*m_datatype.m_length_y) * m_datatype.sizeof_stype();
+						(*m_datatype.m_length_x) * m_datatype.sizeof_stype();
+
 				*(char**)target->m_parameter=SG_MALLOC(char, num_bytes);
+
+				/* check whether ptype is SGOBJECT, if yes we need to initialize
+				   the memory with NULL for the way copy_ptype handles it */
+				if (m_datatype.m_ptype==PT_SGOBJECT)
+					memset(*(void**)target->m_parameter, 0, num_bytes);
 
 				/* use length of source */
 				*target->m_datatype.m_length_y=*m_datatype.m_length_y;
 				*target->m_datatype.m_length_x=*m_datatype.m_length_x;
+
+				SG_SDEBUG("%d bytes are allocated\n", num_bytes);
 			}
 
 			/* now start actual copying, assume that sizes are equal and memory
@@ -4103,7 +3943,7 @@ bool TParameter::copy(TParameter* target)
 						m_datatype.m_ptype, pointer_a, pointer_b))
 				{
 					SG_SDEBUG("leaving TParameter::copy(): vector element "
-							"differes\n");
+							"differs\n");
 					return false;
 				}
 

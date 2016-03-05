@@ -11,6 +11,8 @@
 #ifndef __RANDOM_H__
 #define __RANDOM_H__
 
+#include <shogun/lib/config.h>
+
 #include <shogun/base/SGObject.h>
 #include <shogun/lib/config.h>
 #include <shogun/lib/Lock.h>
@@ -84,11 +86,10 @@ namespace shogun
 			 *
 			 * @return the random 64-bit signed integer
 			 */
-			int64_t random_s64() const
+			inline int64_t random_s64() const
 			{
 				return random_64() & ((uint64_t(-1)<<1)>>1);
 			}
-
 
 			/** generate an unsigned 64bit integer in the range
 			 * [min_value, max_value] (closed interval!)
@@ -265,6 +266,12 @@ namespace shogun
 			 */
 			float64_t std_normal_distrib() const;
 
+			/**
+			 * Generate a seed for PRNG
+			 *
+			 * @return entropy for PRNG
+			 */
+			static uint32_t generate_seed();
 
 			virtual const char* get_name() const { return "Random"; }
 
@@ -295,7 +302,6 @@ namespace shogun
 			 */
 			float64_t GaussianPdfDenormInv(float64_t y) const;
 
-		private:
 			/** seed */
 			uint32_t m_seed;
 
@@ -312,9 +318,9 @@ namespace shogun
 			int32_t m_blockCount; //= 128;
 
 			/** Right hand x coord of the base rectangle, thus also the left hand x coord of the tail */
-		float64_t m_R;//= 3.442619855899;
+			float64_t m_R;//= 3.442619855899;
 
-		/** Area of each rectangle (pre-determined/computed for 128 blocks). */
+			/** Area of each rectangle (pre-determined/computed for 128 blocks). */
 			float64_t m_A;// = 9.91256303526217e-3;
 
 			/** Scale factor for converting a UInt with range [0,0xffffffff] to a double with range [0,1]. */
@@ -328,9 +334,9 @@ namespace shogun
 			float64_t* m_y;
 
 			/** The proprtion of each segment that is entirely within the distribution, expressed as uint where
-	  a value of 0 indicates 0% and uint.MaxValue 100%. Expressing this as an integer allows some floating
-	  points operations to be replaced with integer ones.
-	 */
+			a value of 0 indicates 0% and uint.MaxValue 100%. Expressing this as an integer allows some floating
+			points operations to be replaced with integer ones.
+			*/
 			uint32_t* m_xComp;
 
 			/** state lock */

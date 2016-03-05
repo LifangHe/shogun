@@ -26,18 +26,12 @@
 
 #ifdef USE_SVMLIGHT
 #include <shogun/classifier/svm/SVM.h>
-#include <shogun/kernel/Kernel.h>
-#include <shogun/mathematics/Math.h>
 #include <shogun/lib/common.h>
-
-#include <stdio.h>
-#include <ctype.h>
-#include <string.h>
-#include <stdlib.h>
-#include <time.h>
 
 namespace shogun
 {
+
+class CKernel;
 //# define VERSION       "V3.50 -- correct??"
 //# define VERSION_DATE  "01.11.00 -- correct??"
 

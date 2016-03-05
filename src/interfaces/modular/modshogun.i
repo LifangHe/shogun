@@ -7,6 +7,18 @@
  * Written (W) 2011 Soeren Sonnenburg
  * Copyright (C) 2011 Berlin Institute of Technology and Max-Planck-Society
  */
+
+/* This is needed with SWIG >= 3.0.5 on MacOSX because of
+   conflicting macros in AssertMacros.h of Carbon-framework.
+   Won't cause harm on other distros. */
+%{
+#if defined(__APPLE__)
+#define __ASSERT_MACROS_DEFINE_VERSIONS_WITHOUT_UNDERSCORES 0
+#endif // defined(__APPLE__)
+%}
+
+%include "swig_config.h"
+
 %define DOCSTR
 "The `modshogun` module gathers all modules available in the SHOGUN toolkit."
 %enddef
@@ -67,9 +79,12 @@
 %include "Metric_includes.i"
 %include "GaussianProcess_includes.i"
 %include "Ensemble_includes.i"
+%include "NeuralNets_includes.i"
+%include "bagging_includes.i"
+%include "Boost_includes.i"
 
-%include "Machine.i"
 %include "SGBase.i"
+%include "Machine.i"
 %include "IO.i"
 %include "Library.i"
 %include "Mathematics.i"
@@ -93,6 +108,9 @@
 %include "Metric.i"
 %include "GaussianProcess.i"
 %include "Ensemble.i"
+%include "NeuralNets.i"
+%include "bagging.i"
+%include "Boost.i"
 
 #if defined(SWIGPERL)
 %include "abstract_types_extension.i"

@@ -6,6 +6,7 @@
  *
  * Written (W) 2007-2010 Soeren Sonnenburg
  * Written (W) 2011 Shashwat Lal Das
+ * Modifications (W) 2013 Thoralf Klein
  * Copyright (c) 2007-2009 The LIBLINEAR Project.
  * Copyright (C) 2007-2010 Fraunhofer Institute FIRST and Max-Planck-Society
  */
@@ -22,8 +23,19 @@
 
 namespace shogun
 {
-/** @brief Class implementing a purely online version of LibLinear,
+/** @brief Class implementing a purely online version of CLibLinear,
  * using the L2R_L1LOSS_SVC_DUAL solver only. */
+
+/** @brief This class provides an interface to the LibLinear library for large-
+ * scale linear learning [1] focusing on SVM. This is the online-classification interface. For
+ * batch classification, see CLibLinear, for batch regression, see
+ * CLibLinearRegression.
+ *
+ * This class offers ::L2R_L1LOSS_SVC_DUAL only.
+ * See the ::LIBLINEAR_SOLVER_TYPE enum for types of solvers for batch SVM.
+ *
+ * [1] http://www.csie.ntu.edu.tw/~cjlin/liblinear/
+ * */
 class COnlineLibLinear : public COnlineLinearMachine
 {
 public:
@@ -120,6 +132,12 @@ public:
 		 */
 		virtual void train_one(SGVector<float32_t> ex, float64_t label);
 
+		/** train on one *sparse* vector
+		 * @param ex the example being trained
+		 * @param label label of this example
+		 */
+		virtual void train_one(SGSparseVector<float32_t> ex, float64_t label);
+
 private:
 		/** Set up parameters */
 		void init();
@@ -139,8 +157,7 @@ private:
 		float64_t C, d, G;
 		float64_t QD;
 
-		// y and alpha for example being processed
-		int32_t y_current;
+		// alpha for example being processed
 		float64_t alpha_current;
 
 		// Cost constants

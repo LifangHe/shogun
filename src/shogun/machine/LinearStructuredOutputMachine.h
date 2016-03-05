@@ -4,6 +4,7 @@
  * the Free Software Foundation; either version 3 of the License, or
  * (at your option) any later version.
  *
+ * Written (W) 2013 Thoralf Klein
  * Written (W) 2012 Fernando José Iglesias García
  * Copyright (C) 2012 Fernando José Iglesias García
  */
@@ -11,11 +12,15 @@
 #ifndef _LINEAR_STRUCTURED_OUTPUT_MACHINE__H__
 #define _LINEAR_STRUCTURED_OUTPUT_MACHINE__H__
 
-#include <shogun/features/Features.h>
+#include <shogun/lib/config.h>
+
 #include <shogun/machine/StructuredOutputMachine.h>
+#include <shogun/lib/SGVector.h>
 
 namespace shogun
 {
+
+class CFeatures;
 
 /** TODO doc */
 class CLinearStructuredOutputMachine : public CStructuredOutputMachine

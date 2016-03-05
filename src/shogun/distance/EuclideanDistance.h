@@ -117,11 +117,17 @@ class CEuclideanDistance: public CRealDistance
 
 		virtual SGVector<float64_t> multiple_distance(int32_t idx_a	);
 
-		virtual void set_rhs_sq_norm(SGVector<float64_t> rs);
-		virtual void set_lhs_sq_norm(SGVector<float64_t> ls);
+		virtual void precompute_rhs_squared_norms();
 
-		virtual void reset_rhs_sq_norm();
-		virtual void reset_lhs_sq_norm();		
+		virtual void precompute_lhs_squared_norms();
+	
+		virtual void reset_rhs_squared_norms();
+		
+		virtual void reset_lhs_squared_norms();	
+		
+		virtual void set_dot_enabled(bool dot);
+
+		virtual bool get_dot_enabled();	
 
 	protected:
 		/// compute kernel function for features a and b
@@ -135,10 +141,11 @@ class CEuclideanDistance: public CRealDistance
 	protected:
 		/** if application of sqrt on matrix computation is disabled */
 		bool disable_sqrt;
-		bool rhs_sq_norm;
-		bool lhs_sq_norm;		
-		SGVector<float64_t> rhs_sq;
-		SGVector<float64_t> lhs_sq;
+		bool m_rhs_sq_norms;
+		bool m_lhs_sq_norms;
+		bool m_dot_enabled;		
+		SGVector<float64_t> m_rhs_squared_norms;
+		SGVector<float64_t> m_lhs_squared_norms;
 };
 
 } // namespace shogun

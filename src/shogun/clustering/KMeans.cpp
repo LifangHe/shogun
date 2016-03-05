@@ -82,10 +82,14 @@ void CKMeans::set_random_centers(SGVector<float64_t> weights_set, SGVector<int32
 	mus.zero();
 	CDenseFeatures<float64_t>* lhs=
 		CDenseFeatures<float64_t>::obtain_from_generic(distance->get_lhs());
+	
+	SGVector<int32_t> temp=SGVector<int32_t>(XSize);
+	SGVector<int32_t>::range_fill_vector(temp, XSize, 0);
+	CMath::permute(temp);
 
 	for (int32_t i=0; i<k; i++)
 	{
-		const int32_t Cl=CMath::random(0, XSize-1);
+		const int32_t Cl=temp[i];
 		//weights_set[Cl]+=1.0;
 		//ClList[i]=Cl;
 
@@ -160,8 +164,9 @@ void CKMeans::set_initial_centers(SGVector<float64_t> weights_set,
 {
 	ASSERT(mus_initial.matrix);
 
+	mus = mus_initial;
 	/// set rhs to mus_start
-	CDenseFeatures<float64_t>* rhs_mus=new CDenseFeatures<float64_t>(0);
+/*	CDenseFeatures<float64_t>* rhs_mus=new CDenseFeatures<float64_t>(0);
 	CFeatures* rhs_cache=distance->replace_rhs(rhs_mus);
 	rhs_mus->copy_feature_matrix(mus_initial);
 
@@ -189,10 +194,10 @@ void CKMeans::set_initial_centers(SGVector<float64_t> weights_set,
 		}
 		ClList[i]=Cl;
 	}
-
+*/
 	/* Compute the sum of all points belonging to a cluster
 	 * and count the points */
-	CDenseFeatures<float64_t>* lhs=
+/*	CDenseFeatures<float64_t>* lhs=
 			(CDenseFeatures<float64_t>*)distance->get_lhs();
 	for (int32_t i=0; i<XSize; i++)
 	{
@@ -213,7 +218,7 @@ void CKMeans::set_initial_centers(SGVector<float64_t> weights_set,
 	delete rhs_mus;
 
 		/* normalization to get the mean */
-	for (int32_t i=0; i<k; i++)
+/*	for (int32_t i=0; i<k; i++)
 	{
 		if (weights_set[i]!=0.0)
 		{
@@ -221,7 +226,7 @@ void CKMeans::set_initial_centers(SGVector<float64_t> weights_set,
 				mus.matrix[i*dimensions+j] /= weights_set[i];
 		}
 	}
-
+*/
 }
 
 void CKMeans::compute_cluster_variances()

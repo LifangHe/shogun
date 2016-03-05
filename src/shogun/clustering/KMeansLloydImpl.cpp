@@ -39,15 +39,15 @@ void CKMeansLloydImpl::Lloyd_KMeans(int32_t k, CDistance* distance, int32_t max_
 
 //	SGMatrix<float64_t> sq = linalg::elementwise_square(lh_m);
 //	linalg::colwise_sum(sq, rhs_sq_norm);
-	for(int32_t idx_i =0; idx_i<XSize; idx_i++)
+/*	for(int32_t idx_i =0; idx_i<XSize; idx_i++)
 	{
 		SGVector<float64_t> avec=((CDenseFeatures<float64_t>*) lhs)->get_feature_vector(idx_i);
 		float64_t temp = linalg::dot(avec, avec);
 		lhs_sq_norm[idx_i] = temp;
 		((CDenseFeatures<float64_t>*) lhs)->free_feature_vector(avec, idx_i);
 		
-	}
-	((CEuclideanDistance*) distance)->set_lhs_sq_norm(lhs_sq_norm);
+	}*/
+	((CEuclideanDistance*) distance)->precompute_lhs_squared_norms();
 
 	int32_t changed=1;
 	int32_t iter=0;
@@ -67,7 +67,7 @@ void CKMeansLloydImpl::Lloyd_KMeans(int32_t k, CDistance* distance, int32_t max_
 
 		//SGMatrix<float64_t> dist = ((CEuclideanDistance*) distance)->get_precomputed_distance();
 
-	
+	/*
 		SGVector<float64_t> rhs_sq_norm(k);
 		for(int32_t idx_i =0; idx_i<k; idx_i++)
 		{
@@ -76,8 +76,9 @@ void CKMeansLloydImpl::Lloyd_KMeans(int32_t k, CDistance* distance, int32_t max_
 			rhs_sq_norm[idx_i] = temp;
 			((CDenseFeatures<float64_t>*) rhs_mus)->free_feature_vector(tempvec, idx_i);
 			
-		}
-		((CEuclideanDistance*) distance)->set_rhs_sq_norm(rhs_sq_norm);
+		}*/
+		((CEuclideanDistance*) distance)->set_dot_enabled(true);
+		((CEuclideanDistance*) distance)->precompute_rhs_squared_norms();
 		
 		for (int32_t i=0; i<XSize; i++)
 		{ 
@@ -159,14 +160,14 @@ void CKMeansLloydImpl::Lloyd_KMeans(int32_t k, CDistance* distance, int32_t max_
 			}
 					
 		}
-		((CEuclideanDistance*) distance)->reset_rhs_sq_norm();
+		((CEuclideanDistance*) distance)->reset_rhs_squared_norms();
 		
 		
 		if (iter%1000 == 0)
 			SG_SINFO("Iteration[%d/%d]: Assignment of %i patterns changed.\n", iter, max_iter, changed)
 			SG_SPRINT("iter %d, %i", iter, changed)
 	}
-	((CEuclideanDistance*) distance)->reset_lhs_sq_norm();
+	((CEuclideanDistance*) distance)->reset_lhs_squared_norms();
 	distance->replace_rhs(rhs_cache);
 	delete rhs_mus;
 	SG_UNREF(lhs);

@@ -113,6 +113,16 @@ class CEuclideanDistance: public CRealDistance
 		 */
 		virtual float64_t distance_upper_bounded(int32_t idx_a, int32_t idx_b, float64_t upper_bound);
 
+		virtual SGMatrix<float64_t> get_precomputed_distance();
+
+		virtual SGVector<float64_t> multiple_distance(int32_t idx_a	);
+
+		virtual void set_rhs_sq_norm(SGVector<float64_t> rs);
+		virtual void set_lhs_sq_norm(SGVector<float64_t> ls);
+
+		virtual void reset_rhs_sq_norm();
+		virtual void reset_lhs_sq_norm();		
+
 	protected:
 		/// compute kernel function for features a and b
 		/// idx_{a,b} denote the index of the feature vectors
@@ -125,6 +135,10 @@ class CEuclideanDistance: public CRealDistance
 	protected:
 		/** if application of sqrt on matrix computation is disabled */
 		bool disable_sqrt;
+		bool rhs_sq_norm;
+		bool lhs_sq_norm;		
+		SGVector<float64_t> rhs_sq;
+		SGVector<float64_t> lhs_sq;
 };
 
 } // namespace shogun

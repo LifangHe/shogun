@@ -13,10 +13,12 @@
 #include "shogun/clustering/KMeansMiniBatchImpl.h"
 #include <shogun/clustering/KMeans.h>
 #include <shogun/distance/Distance.h>
+#include <shogun/distance/EuclideanDistance.h>
 #include <shogun/labels/Labels.h>
 #include <shogun/features/DenseFeatures.h>
 #include <shogun/mathematics/Math.h>
 #include <shogun/base/Parallel.h>
+#include <shogun/mathematics/linalg/linalg.h>
 
 #ifdef HAVE_PTHREAD
 #include <pthread.h>
@@ -77,6 +79,7 @@ void CKMeans::set_initial_centers(SGMatrix<float64_t> centers)
 
 void CKMeans::set_random_centers(SGVector<float64_t> weights_set, SGVector<int32_t> ClList, int32_t XSize)
 {
+	mus.zero();
 	CDenseFeatures<float64_t>* lhs=
 		CDenseFeatures<float64_t>::obtain_from_generic(distance->get_lhs());
 
@@ -91,7 +94,7 @@ void CKMeans::set_random_centers(SGVector<float64_t> weights_set, SGVector<int32
 		float64_t* vec=lhs->get_feature_vector(Cl, vlen, vfree);
 
 		for (int32_t j=0; j<dimensions; j++)
-			mus.matrix[i*dimensions+j] = vec[j];
+			mus.matrix[i*dimensions+j] += vec[j];
 
 		lhs->free_feature_vector(vec, Cl, vfree);
 	}
@@ -105,9 +108,14 @@ void CKMeans::set_random_centers(SGVector<float64_t> weights_set, SGVector<int32
 //		}
 //	}
 
-	CDenseFeatures<float64_t>* rhs_mus=new CDenseFeatures<float64_t>(0);
+/*	CDenseFeatures<float64_t>* rhs_mus=new CDenseFeatures<float64_t>(0);
 	CFeatures* rhs_cache=distance->replace_rhs(rhs_mus);
 	rhs_mus->copy_feature_matrix(mus);
+	SGVector<float64_t> rhs_sq_norm = SGVector<float64_t>(k);
+	SGMatrix<float64_t> sq = linalg::elementwise_square(mus);
+	linalg::colwise_sum(sq, rhs_sq_norm);
+	((CEuclideanDistance*) distance)->set_rhs_sq_norm(rhs_sq_norm);
+
 
 	SGVector<float64_t> dists=SGVector<float64_t>(k*XSize);
 	dists.zero();
@@ -134,16 +142,16 @@ void CKMeans::set_random_centers(SGVector<float64_t> weights_set, SGVector<int32
 		ClList[i]=Cl;
 	}
 
-	/* Compute the sum of all points belonging to a cluster
-	 * and count the points */
+
 	for (int32_t i=0; i<XSize; i++)
 	{
 		const int32_t Cl = ClList[i];
 		weights_set[Cl]+=1.0;
 	}
+	*/
 	SG_UNREF(lhs);
-	distance->replace_rhs(rhs_cache);
-	delete rhs_mus;
+//	distance->replace_rhs(rhs_cache);
+//	delete rhs_mus;
 
 }
 

@@ -11,6 +11,7 @@
 #include <shogun/lib/common.h>
 #include <shogun/io/SGIO.h>
 #include <shogun/distance/EuclideanDistance.h>
+#include <shogun/mathematics/linalg/linalg.h>
 
 using namespace shogun;
 
@@ -52,23 +53,79 @@ float64_t CEuclideanDistance::compute(int32_t idx_a, int32_t idx_b)
 		get_feature_vector(idx_a, alen, afree);
 	float64_t* bvec=((CDenseFeatures<float64_t>*) rhs)->
 		get_feature_vector(idx_b, blen, bfree);
-	ASSERT(alen==blen)
 
-	for (int32_t i=0; i<alen; i++)
-		result+=CMath::sq(avec[i] - bvec[i]);
+//	SGVector<float64_t> avec=((CDenseFeatures<float64_t>*) lhs)->
+//		get_feature_vector(idx_a);
+//	SGVector<float64_t> bvec=((CDenseFeatures<float64_t>*) rhs)->
+//		get_feature_vector(idx_b);
+//	ASSERT(alen==blen);
+
+	result+=CMath::dot(avec, bvec, alen);
+	result*=-2;
+	if(rhs_sq_norm)
+	{
+		result+=rhs_sq[idx_b];
+	}
+	else
+	{
+		result+=CMath::dot(bvec, bvec, alen);
+	}
+	if(lhs_sq_norm)
+	{
+		result+=lhs_sq[idx_a];
+	}
+	else
+	{
+		result+=CMath::dot(avec, avec, alen);
+	}
+//	for (int32_t i=0; i<alen; i++)
+//		result+=CMath::sq(avec[i] - bvec[i]);
+
+//	result += linalg::dot<linalg::Backend::EIGEN3>(avec, bvec);
+//	result *= -2.0;
+//	result += linalg::dot<linalg::Backend::EIGEN3>(avec, avec);
+//	result += linalg::dot<linalg::Backend::EIGEN3>(bvec, bvec);
+
+//	for (int32_t i=0; i<avec.size(); i++)
+//		result+=CMath::sq(avec[i] - bvec[i]);
 
 	((CDenseFeatures<float64_t>*) lhs)->free_feature_vector(avec, idx_a, afree);
 	((CDenseFeatures<float64_t>*) rhs)->free_feature_vector(bvec, idx_b, bfree);
 
+//	((CDenseFeatures<float64_t>*) lhs)->free_feature_vector(avec, idx_a);
+//	((CDenseFeatures<float64_t>*) rhs)->free_feature_vector(bvec, idx_b);
+//	SG_FREE(&avec);
+//	SG_FREE(&bvec);
+		
 	if (disable_sqrt)
 		return result;
 
 	return CMath::sqrt(result);
 }
+void CEuclideanDistance::set_rhs_sq_norm(SGVector<float64_t> rs)
+{
+	rhs_sq_norm=true;
+	rhs_sq = rs;
+}
+void CEuclideanDistance::set_lhs_sq_norm(SGVector<float64_t> ls)
+{
+	lhs_sq_norm=true;
+	lhs_sq = ls;
+}
+void CEuclideanDistance::reset_rhs_sq_norm()
+{
+	rhs_sq_norm=false;
+}
+void CEuclideanDistance::reset_lhs_sq_norm()
+{
+	lhs_sq_norm=false;
+}
 
 void CEuclideanDistance::init()
 {
 	disable_sqrt=false;
+	rhs_sq_norm=false;
+	lhs_sq_norm=false;
 
 	m_parameters->add(&disable_sqrt, "disable_sqrt", "If sqrt shall not be applied.");
 }
@@ -113,3 +170,84 @@ float64_t CEuclideanDistance::distance_upper_bounded(int32_t idx_a, int32_t idx_
 	else
 		return CMath::sqrt(result);
 }
+
+SGMatrix<float64_t> CEuclideanDistance::get_precomputed_distance()
+{
+	SGMatrix<float64_t>prod(rhs->get_num_vectors(), lhs->get_num_vectors());
+	
+
+
+
+/*
+	
+	SGMatrix<float64_t>lhs_m = ((CDenseFeatures<float64_t>*) lhs)->get_feature_matrix();
+	SGMatrix<float64_t>rhs_m = ((CDenseFeatures<float64_t>*) rhs)->get_feature_matrix();
+	SGMatrix<float64_t>prod(rhs->get_num_vectors(), lhs->get_num_vectors());
+   	linalg::matrix_product(rhs_m, lhs_m, prod, true);
+	linalg::scale(prod, prod, -2.0);
+
+	SGMatrix<float64_t>sq_r = SGMatrix<float64_t>(((CDenseFeatures<float64_t>*) rhs)->get_num_features(), ((CDenseFeatures<float64_t>*) rhs)->get_num_vectors());
+	SGMatrix<float64_t>sq_l = SGMatrix<float64_t>(((CDenseFeatures<float64_t>*) lhs)->get_num_features(), ((CDenseFeatures<float64_t>*) lhs)->get_num_vectors());
+
+	sq_r = linalg::elementwise_square(rhs_m);
+	sq_l = linalg::elementwise_square(lhs_m);
+
+	SGVector<float64_t>r_norm(rhs->get_num_vectors());
+	linalg::colwise_sum(sq_r, r_norm);
+	SGVector<float64_t>l_norm(lhs->get_num_vectors());
+	linalg::colwise_sum(sq_l, l_norm);
+
+	SGMatrix<float64_t>ln(rhs->get_num_vectors(), lhs->get_num_vectors());
+	SGMatrix<float64_t>rn(rhs->get_num_vectors(), lhs->get_num_vectors());
+	linalg::set_rows_const(ln, l_norm);
+	linalg::set_rows_const(rn, r_norm);
+
+	linalg::add(prod, ln, prod);
+	linalg::add(prod, rn, prod);
+	return prod;*/
+}
+ 
+SGVector<float64_t> CEuclideanDistance::multiple_distance(int32_t idx_a)
+{
+	
+	SGVector<float64_t> avec=((CDenseFeatures<float64_t>*) lhs)->get_feature_vector(idx_a);
+	SGMatrix<float64_t>rhs_m = ((CDenseFeatures<float64_t>*) rhs)->get_feature_matrix();
+	SGVector<float64_t>out = SGVector<float64_t>(rhs->get_num_vectors());
+//	SG_SPRINT("here %d %d %d", rhs_m.num_cols, rhs_m.num_rows, avec.size())//.size())
+	linalg::apply(rhs_m, avec, out, true);
+//	SG_SPRINT("here %d", out.size())
+	linalg::scale(out, out, -2.0);
+	SGVector<float64_t> result = SGVector<float64_t>(rhs->get_num_vectors());
+
+//	SGMatrix<float64_t>sq_r = SGMatrix<float64_t>(((CDenseFeatures<float64_t>*) rhs)->get_num_features(), ((CDenseFeatures<float64_t>*) rhs)->get_num_vectors());
+	
+//	SGMatrix<float64_t>sq_r = linalg::elementwise_square(rhs_m);
+	SGVector<float64_t>r_norm(rhs->get_num_vectors());
+//	linalg::colwise_sum(sq_r, r_norm);
+
+	for(int32_t idx_i =0; idx_i<rhs->get_num_vectors(); idx_i++)
+	{
+		SGVector<float64_t> bvec=((CDenseFeatures<float64_t>*) rhs)->get_feature_vector(idx_i);
+		float64_t temp = linalg::dot(bvec, bvec);
+		r_norm[idx_i] = temp;
+		((CDenseFeatures<float64_t>*) rhs)->free_feature_vector(bvec, idx_i);
+		
+	}
+
+	linalg::add(out, r_norm, result);
+	float64_t l_n;
+	if (lhs_sq_norm)
+		l_n = lhs_sq[idx_a];
+	else
+		l_n = linalg::dot(avec, avec);
+	SGVector<float64_t> l_norm = SGVector<float64_t>(rhs->get_num_vectors());
+	l_norm.set_const(l_n);
+
+	SGVector<float64_t> dist = SGVector<float64_t>(rhs->get_num_vectors());
+	linalg::add(result, l_norm, dist);	
+
+	((CDenseFeatures<float64_t>*) lhs)->free_feature_vector(avec, idx_a);
+	return dist;
+}
+	
+

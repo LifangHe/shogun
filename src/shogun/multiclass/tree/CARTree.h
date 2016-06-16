@@ -264,8 +264,8 @@ protected:
 	 * @param count_right stores number of feature values for right transition
 	 * @return index to the best attribute
 	 */
-	virtual int32_t compute_best_attribute(SGMatrix<float64_t> mat, SGVector<float64_t> weights, SGVector<float64_t> labels_vec,
-		SGVector<float64_t> left, SGVector<float64_t> right, SGVector<bool> is_left_final, int32_t &num_missing,
+	virtual int32_t compute_best_attribute(const SGMatrix<float64_t>& mat, const SGVector<float64_t>& weights, const SGVector<float64_t>& labels_vec,
+		SGVector<float64_t>& left, SGVector<float64_t>& right, SGVector<bool>& is_left_final, int32_t &num_missing,
 		int32_t &count_left, int32_t &count_right);
 
 
@@ -329,7 +329,7 @@ protected:
 	 * @param wtotal label distribution in current node
 	 * @return Gini gain achieved after spliting the node
 	 */
-	float64_t gain(SGVector<float64_t> wleft, SGVector<float64_t> wright, SGVector<float64_t> wtotal);
+	float64_t gain(const SGVector<float64_t>& wleft, const SGVector<float64_t>& wright, const SGVector<float64_t>& wtotal);
 
 	/** returns Gini impurity of a node
 	 *
@@ -337,7 +337,7 @@ protected:
 	 * @param total_weight stores the total weight of all classes
 	 * @return Gini index of the node
 	 */
-	float64_t gini_impurity_index(SGVector<float64_t> weighted_lab_classes, float64_t &total_weight);
+	float64_t gini_impurity_index(const SGVector<float64_t>& weighted_lab_classes, float64_t &total_weight);
 
 	/** returns least squares deviation
 	 *

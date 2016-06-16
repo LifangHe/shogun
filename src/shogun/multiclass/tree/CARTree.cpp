@@ -30,7 +30,10 @@
 
 #include <shogun/mathematics/Math.h>
 #include <shogun/multiclass/tree/CARTree.h>
+#include <shogun/mathematics/linalg/linalg.h>
+#include <shogun/mathematics/eigen3.h>
 
+using namespace Eigen;
 using namespace shogun;
 
 const float64_t CCARTree::MISSING=CMath::MAX_REAL_NUMBER;
@@ -483,8 +486,8 @@ SGVector<float64_t> CCARTree::get_unique_labels(SGVector<float64_t> labels_vec, 
 	return ulabels;
 }
 
-int32_t CCARTree::compute_best_attribute(SGMatrix<float64_t> mat, SGVector<float64_t> weights, SGVector<float64_t> labels_vec,
-	SGVector<float64_t> left, SGVector<float64_t> right, SGVector<bool> is_left_final, int32_t &num_missing_final, int32_t &count_left,
+int32_t CCARTree::compute_best_attribute(const SGMatrix<float64_t>& mat, const SGVector<float64_t>& weights, const SGVector<float64_t>& labels_vec,
+	SGVector<float64_t>& left, SGVector<float64_t>& right, SGVector<bool>& is_left_final, int32_t &num_missing_final, int32_t &count_left,
 	int32_t &count_right)
 {
 	int32_t num_vecs=mat.num_cols;
@@ -929,7 +932,7 @@ float64_t CCARTree::gain(SGVector<float64_t> wleft, SGVector<float64_t> wright, 
 	return lsd_n-(lsd_l*(total_lweight/total_weight))-(lsd_r*(total_rweight/total_weight));
 }
 
-float64_t CCARTree::gain(SGVector<float64_t> wleft, SGVector<float64_t> wright, SGVector<float64_t> wtotal)
+float64_t CCARTree::gain(const SGVector<float64_t>& wleft, const SGVector<float64_t>& wright, const SGVector<float64_t>& wtotal)
 {
 	float64_t total_lweight=0;
 	float64_t total_rweight=0;
@@ -941,15 +944,11 @@ float64_t CCARTree::gain(SGVector<float64_t> wleft, SGVector<float64_t> wright, 
 	return gini_n-(gini_l*(total_lweight/total_weight))-(gini_r*(total_rweight/total_weight));
 }
 
-float64_t CCARTree::gini_impurity_index(SGVector<float64_t> weighted_lab_classes, float64_t &total_weight)
+float64_t CCARTree::gini_impurity_index(const SGVector<float64_t>& weighted_lab_classes, float64_t &total_weight)
 {
-	total_weight=0;
-	float64_t gini=0;
-	for (int32_t i=0;i<weighted_lab_classes.vlen;i++)
-	{
-		total_weight+=weighted_lab_classes[i];
-		gini+=weighted_lab_classes[i]*weighted_lab_classes[i];
-	}
+	Map<VectorXd> map_weighted_lab_classes(weighted_lab_classes.vector, weighted_lab_classes.size());
+	total_weight=map_weighted_lab_classes.sum();
+	float64_t gini=map_weighted_lab_classes.dot(map_weighted_lab_classes);
 
 	gini=1.0-(gini/(total_weight*total_weight));
 	return gini;

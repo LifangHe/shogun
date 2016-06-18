@@ -249,7 +249,8 @@ protected:
 	 * @param n_ulabels stores number of unique labels
 	 * @return unique labels
 	 */
-	SGVector<float64_t> get_unique_labels(SGVector<float64_t> labels_vec, int32_t &n_ulabels);
+	SGVector<float64_t> get_unique_labels(const SGVector<float64_t>& labels_vec, const SGVector<float64_t>& weights,
+		   	SGVector<float64_t>& total_wclasses, SGVector<int32_t>& simple_labels, int32_t &n_ulabels);
 
 	/** computes best attribute for CARTtrain
 	 *

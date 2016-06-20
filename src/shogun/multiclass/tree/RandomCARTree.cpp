@@ -108,18 +108,20 @@ int32_t CRandomCARTree::compute_best_attribute(const SGMatrix<float64_t>& mat, c
 			feats[j]=mat(idx[i],j);
 
 		// O(N*logN)
-		SGVector<index_t> sorted_args=CMath::argsort(feats);
+		SGVector<index_t> sorted_args(feats.size());
+		sorted_args.range_fill();
+		CMath::qsort_index(feats.vector, sorted_args.vector, feats.size());
 
 		// number of non-missing vecs
 		int32_t n_nm_vecs=feats.vlen;
-		while (feats[sorted_args[n_nm_vecs-1]]==MISSING)
+		while (feats[n_nm_vecs-1]==MISSING)
 		{
 			total_wclasses[simple_labels[sorted_args[n_nm_vecs-1]]]-=weights[sorted_args[n_nm_vecs-1]];
 			n_nm_vecs--;
 		}
 
 		// if only one unique value - it cannot be used to split
-		if (feats[sorted_args[n_nm_vecs-1]]<=feats[sorted_args[0]]+EQ_DELTA)
+		if (feats[n_nm_vecs-1]<=feats[0]+EQ_DELTA)
 			continue;
 
 		if (m_nominal[idx[i]])
@@ -128,25 +130,25 @@ int32_t CRandomCARTree::compute_best_attribute(const SGMatrix<float64_t>& mat, c
 			simple_feats.fill_vector(simple_feats.vector,simple_feats.vlen,-1);
 
 			// convert to simple values
-			simple_feats[sorted_args[0]]=0;
+			simple_feats[0]=0;
 			int32_t c=0;
 			for (int32_t j=1;j<n_nm_vecs;j++)
 			{
-				if (feats[sorted_args[j]]==feats[sorted_args[j-1]])
-					simple_feats[sorted_args[j]]=c;
+				if (feats[j]==feats[j-1])
+					simple_feats[j]=c;
 				else
-					simple_feats[sorted_args[j]]=(++c);
+					simple_feats[j]=(++c);
 			}
 
 			SGVector<float64_t> ufeats(c+1);
-			ufeats[0]=feats[sorted_args[0]];
+			ufeats[0]=feats[0];
 			int32_t u=0;
 			for (int32_t j=1;j<n_nm_vecs;j++)
 			{
-				if (feats[sorted_args[j]]==feats[sorted_args[j-1]])
+				if (feats[j]==feats[j-1])
 					continue;
 				else
-					ufeats[++u]=feats[sorted_args[j]];
+					ufeats[++u]=feats[j];
 			}
 
 			// test all 2^(I-1)-1 possible division between two nodes
@@ -172,7 +174,7 @@ int32_t CRandomCARTree::compute_best_attribute(const SGMatrix<float64_t>& mat, c
 				// form is_left
 				for (int32_t j=0;j<n_nm_vecs;j++)
 				{
-					is_left[sorted_args[j]]=feats_left[simple_feats[sorted_args[j]]];
+					is_left[sorted_args[j]]=feats_left[simple_feats[j]];
 					if (is_left[sorted_args[j]])
 						wleft[simple_labels[sorted_args[j]]]+=weights[sorted_args[j]];
 					else
@@ -221,12 +223,12 @@ int32_t CRandomCARTree::compute_best_attribute(const SGMatrix<float64_t>& mat, c
 
 			// O(N)
 			// find best split for non-nominal attribute - choose threshold (z)
-			float64_t z=feats[sorted_args[0]];
+			float64_t z=feats[0];
 			right_wclasses[simple_labels[sorted_args[0]]]-=weights[sorted_args[0]];
 			left_wclasses[simple_labels[sorted_args[0]]]+=weights[sorted_args[0]];
 			for (int32_t j=1;j<n_nm_vecs;j++)
 			{
-				if (feats[sorted_args[j]]<=z+EQ_DELTA)
+				if (feats[j]<=z+EQ_DELTA)
 				{
 					right_wclasses[simple_labels[sorted_args[j]]]-=weights[sorted_args[j]];
 					left_wclasses[simple_labels[sorted_args[j]]]+=weights[sorted_args[j]];
@@ -250,8 +252,8 @@ int32_t CRandomCARTree::compute_best_attribute(const SGMatrix<float64_t>& mat, c
 					num_missing_final=num_vecs-n_nm_vecs;
 				}
 
-				z=feats[sorted_args[j]];
-				if (feats[sorted_args[n_nm_vecs-1]]<=z+EQ_DELTA)
+				z=feats[j];
+				if (feats[n_nm_vecs-1]<=z+EQ_DELTA)
 					break;
 
 				right_wclasses[simple_labels[sorted_args[j]]]-=weights[sorted_args[j]];

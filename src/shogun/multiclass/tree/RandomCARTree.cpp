@@ -58,18 +58,32 @@ int32_t CRandomCARTree::compute_best_attribute(const SGMatrix<float64_t>& mat, c
 	int32_t num_feats=mat.num_rows;
 
 	int32_t n_ulabels;
-	SGVector<float64_t> total_wclasses_temp(num_vecs);
-	total_wclasses_temp.zero();
-	SGVector<int32_t> simple_labels(num_vecs);
-
-	SGVector<float64_t> ulabels=get_unique_labels(labels_vec, weights, total_wclasses_temp, simple_labels, n_ulabels);
+	SGVector<float64_t> ulabels=get_unique_labels(labels_vec,n_ulabels);
 
 	// if all labels same early stop
 	if (n_ulabels==1)
 		return -1;
 
+	float64_t delta=0;
+	if (m_mode==PT_REGRESSION)
+		delta=m_label_epsilon;
+
 	SGVector<float64_t> total_wclasses(n_ulabels);
-	memcpy(total_wclasses.vector, total_wclasses_temp.vector, sizeof(float64_t)*n_ulabels);
+	total_wclasses.zero();
+
+	SGVector<int32_t> simple_labels(num_vecs);
+	for (int32_t i=0;i<num_vecs;i++)
+	{
+		for (int32_t j=0;j<n_ulabels;j++)
+		{
+			if (CMath::abs(labels_vec[i]-ulabels[j])<=delta)
+			{
+				simple_labels[i]=j;
+				total_wclasses[j]+=weights[i];
+				break;
+			}
+		}
+	}
 
 	REQUIRE(m_randsubset_size<=num_feats, "The Feature subset size(set %d) should be less than"
 	" or equal to the total number of features(%d here)\n",m_randsubset_size,num_feats)

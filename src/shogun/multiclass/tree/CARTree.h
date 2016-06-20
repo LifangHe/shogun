@@ -249,8 +249,7 @@ protected:
 	 * @param n_ulabels stores number of unique labels
 	 * @return unique labels
 	 */
-	SGVector<float64_t> get_unique_labels(const SGVector<float64_t>& labels_vec, const SGVector<float64_t>& weights,
-		   	SGVector<float64_t>& total_wclasses, SGVector<int32_t>& simple_labels, int32_t &n_ulabels);
+	SGVector<float64_t> get_unique_labels(SGVector<float64_t> labels_vec, int32_t &n_ulabels);
 
 	/** computes best attribute for CARTtrain
 	 *
@@ -347,7 +346,7 @@ protected:
 	 * @param total_weight stores sum of weights in weights vector
 	 * @return least squares deviation of the data
 	 */
-	float64_t least_squares_deviation(SGVector<float64_t> labels, SGVector<float64_t> weights, float64_t &total_weight);
+	float64_t least_squares_deviation(const SGVector<float64_t>& labels, const SGVector<float64_t>& weights, float64_t &total_weight);
 
 	/** uses current subtree to classify/regress data
 	 *

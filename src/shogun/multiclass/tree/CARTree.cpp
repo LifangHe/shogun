@@ -462,8 +462,7 @@ CBinaryTreeMachineNode<CARTreeNodeData>* CCARTree::CARTtrain(CFeatures* data, SG
 	return node;
 }
 
-SGVector<float64_t> CCARTree::get_unique_labels(const SGVector<float64_t>& labels_vec, const SGVector<float64_t>& weights,
-	   	SGVector<float64_t>& total_wclasses, SGVector<int32_t>& simple_labels, int32_t &n_ulabels)
+SGVector<float64_t> CCARTree::get_unique_labels(SGVector<float64_t> labels_vec, int32_t &n_ulabels)
 {
 	float64_t delta=0;
 	if (m_mode==PT_REGRESSION)
@@ -472,25 +471,15 @@ SGVector<float64_t> CCARTree::get_unique_labels(const SGVector<float64_t>& label
 	SGVector<float64_t> ulabels(labels_vec.vlen);
 	SGVector<index_t> sidx=CMath::argsort(labels_vec);
 	ulabels[0]=labels_vec[sidx[0]];
-	total_wclasses[0]+=weights[sidx[0]];
-	simple_labels[sidx[0]]=ulabels[0];
 	n_ulabels=1;
 	int32_t start=0;
-	
 	for (int32_t i=1;i<sidx.vlen;i++)
 	{
 		if (labels_vec[sidx[i]]<=labels_vec[sidx[start]]+delta)
-		{
-			total_wclasses[n_ulabels-1]+=weights[sidx[i]];
-			simple_labels[sidx[i]]=n_ulabels-1;
 			continue;
-		}
 
 		start=i;
 		ulabels[n_ulabels]=labels_vec[sidx[i]];
-		
-		simple_labels[sidx[i]]=n_ulabels;
-		total_wclasses[n_ulabels]+=weights[sidx[i]];
 		n_ulabels++;
 	}
 
@@ -505,19 +494,32 @@ int32_t CCARTree::compute_best_attribute(const SGMatrix<float64_t>& mat, const S
 	int32_t num_feats=mat.num_rows;
 
 	int32_t n_ulabels;
-
-	SGVector<float64_t> total_wclasses_temp(num_vecs);
-	total_wclasses_temp.zero();
-	SGVector<int32_t> simple_labels(num_vecs);
-
-	SGVector<float64_t> ulabels=get_unique_labels(labels_vec, weights, total_wclasses_temp, simple_labels, n_ulabels);
+	SGVector<float64_t> ulabels=get_unique_labels(labels_vec,n_ulabels);
 
 	// if all labels same early stop
 	if (n_ulabels==1)
 		return -1;
 
+	float64_t delta=0;
+	if (m_mode==PT_REGRESSION)
+		delta=m_label_epsilon;
+
 	SGVector<float64_t> total_wclasses(n_ulabels);
-	memcpy(total_wclasses.vector, total_wclasses_temp.vector, sizeof(float64_t)*n_ulabels);
+	total_wclasses.zero();
+
+	SGVector<int32_t> simple_labels(num_vecs);
+	for (int32_t i=0;i<num_vecs;i++)
+	{
+		for (int32_t j=0;j<n_ulabels;j++)
+		{
+			if (CMath::abs(labels_vec[i]-ulabels[j])<=delta)
+			{
+				simple_labels[i]=j;
+				total_wclasses[j]+=weights[i];
+				break;
+			}
+		}
+	}
 
 	float64_t max_gain=MIN_SPLIT_GAIN;
 	int32_t best_attribute=-1;
@@ -675,7 +677,6 @@ int32_t CCARTree::compute_best_attribute(const SGMatrix<float64_t>& mat, const S
 				z=feats[j];
 				if (feats[n_nm_vecs-1]<=z+EQ_DELTA)
 					break;
-
 				right_wclasses[simple_labels[sorted_args[j]]]-=weights[sorted_args[j]];
 				left_wclasses[simple_labels[sorted_args[j]]]+=weights[sorted_args[j]];
 			}		
@@ -953,15 +954,13 @@ float64_t CCARTree::gini_impurity_index(const SGVector<float64_t>& weighted_lab_
 	return gini;
 }
 
-float64_t CCARTree::least_squares_deviation(SGVector<float64_t> feats, SGVector<float64_t> weights, float64_t &total_weight)
+float64_t CCARTree::least_squares_deviation(const SGVector<float64_t>& feats, const SGVector<float64_t>& weights, float64_t &total_weight)
 {
-	float64_t mean=0;
-	total_weight=0;
-	for (int32_t i=0;i<weights.vlen;i++)
-	{
-		mean+=feats[i]*weights[i];
-		total_weight+=weights[i];
-	}
+
+	Map<VectorXd> map_weights(weights.vector, weights.size());
+	Map<VectorXd> map_feats(feats.vector, weights.size());	
+	float64_t mean=map_weights.dot(map_feats);
+	total_weight=map_weights.sum();
 
 	mean/=total_weight;
 	float64_t dev=0;

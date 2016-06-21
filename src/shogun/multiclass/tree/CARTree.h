@@ -266,7 +266,7 @@ protected:
 	 */
 	virtual int32_t compute_best_attribute(const SGMatrix<float64_t>& mat, const SGVector<float64_t>& weights, const SGVector<float64_t>& labels_vec,
 		SGVector<float64_t>& left, SGVector<float64_t>& right, SGVector<bool>& is_left_final, int32_t &num_missing,
-		int32_t &count_left, int32_t &count_right);
+		int32_t &count_left, int32_t &count_right, int32_t subset_size=0);
 
 
 	/** handles missing values through surrogate splits
@@ -420,6 +420,9 @@ protected:
 
 	/** vector depicting whether various feature dimensions are nominal or not **/
 	SGVector<bool> m_nominal;
+
+	/** Vector to keep track of constant features to skip */
+	SGVector<bool> m_constant_feats;
 
 	/** weights of samples in training set **/
 	SGVector<float64_t> m_weights;

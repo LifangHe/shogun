@@ -488,7 +488,7 @@ SGVector<float64_t> CCARTree::get_unique_labels(SGVector<float64_t> labels_vec, 
 
 int32_t CCARTree::compute_best_attribute(const SGMatrix<float64_t>& mat, const SGVector<float64_t>& weights, const SGVector<float64_t>& labels_vec,
 	SGVector<float64_t>& left, SGVector<float64_t>& right, SGVector<bool>& is_left_final, int32_t &num_missing_final, int32_t &count_left,
-	int32_t &count_right)
+	int32_t &count_right, int32_t subset_size)
 {
 	int32_t num_vecs=mat.num_cols;
 	int32_t num_feats=mat.num_rows;
@@ -520,6 +520,14 @@ int32_t CCARTree::compute_best_attribute(const SGMatrix<float64_t>& mat, const S
 			}
 		}
 	}
+	
+	SGVector<index_t> idx(num_feats);
+	idx.range_fill();
+	if (subset_size)
+	{
+		num_feats=subset_size;
+		CMath::permute(idx);
+	}
 
 	float64_t max_gain=MIN_SPLIT_GAIN;
 	int32_t best_attribute=-1;
@@ -528,7 +536,7 @@ int32_t CCARTree::compute_best_attribute(const SGMatrix<float64_t>& mat, const S
 	{
 		SGVector<float64_t> feats(num_vecs);
 		for (int32_t j=0;j<num_vecs;j++)
-			feats[j]=mat(i,j);
+			feats[j]=mat(idx[i],j);
 
 		// O(N*logN)
 		SGVector<index_t> sorted_args(feats.size());
@@ -547,7 +555,7 @@ int32_t CCARTree::compute_best_attribute(const SGMatrix<float64_t>& mat, const S
 		if (feats[n_nm_vecs-1]<=feats[0]+EQ_DELTA)
 			continue;
 
-		if (m_nominal[i])
+		if (m_nominal[idx[i]])
 		{
 			SGVector<int32_t> simple_feats(num_vecs);
 			simple_feats.fill_vector(simple_feats.vector,simple_feats.vlen,-1);
@@ -614,7 +622,7 @@ int32_t CCARTree::compute_best_attribute(const SGMatrix<float64_t>& mat, const S
 
 				if (g>max_gain)
 				{
-					best_attribute=i;
+					best_attribute=idx[i];
 					max_gain=g;
 					memcpy(is_left_final.vector,is_left.vector,is_left.vlen*sizeof(bool));
 					num_missing_final=num_vecs-n_nm_vecs;
@@ -669,7 +677,7 @@ int32_t CCARTree::compute_best_attribute(const SGMatrix<float64_t>& mat, const S
 				if (g>max_gain)
 				{
 					max_gain=g;
-					best_attribute=i;
+					best_attribute=idx[i];
 					best_threshold=z;
 					num_missing_final=num_vecs-n_nm_vecs;
 				}

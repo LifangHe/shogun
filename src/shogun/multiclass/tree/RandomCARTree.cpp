@@ -49,9 +49,9 @@ void CRandomCARTree::set_feature_subset_size(int32_t size)
 	m_randsubset_size=size;
 }
 
-int32_t CRandomCARTree::compute_best_attribute(const SGMatrix<float64_t>& mat, const SGVector<float64_t>& weights, const SGVector<float64_t>& labels_vec,
+int32_t CRandomCARTree::compute_best_attribute(const SGMatrix<float64_t>& mat, const SGVector<float64_t>& weights, CLabels* labels,
 	SGVector<float64_t>& left, SGVector<float64_t>& right, SGVector<bool>& is_left_final, int32_t &num_missing_final, int32_t &count_left,
-	int32_t &count_right, int32_t subset_size)
+	int32_t &count_right, int32_t subset_size, const SGVector<index_t>& active_indices)
 
 {
 	REQUIRE(m_randsubset_size<=mat.num_rows, "The Feature subset size(set %d) should be less than"
@@ -63,7 +63,7 @@ int32_t CRandomCARTree::compute_best_attribute(const SGMatrix<float64_t>& mat, c
 
 	subset_size=m_randsubset_size;
 
-	return CCARTree::compute_best_attribute(mat,weights,labels_vec,left,right,is_left_final,num_missing_final,count_left,count_right,subset_size);
+	return CCARTree::compute_best_attribute(mat,weights,labels,left,right,is_left_final,num_missing_final,count_left,count_right,subset_size, active_indices);
 
 }
 

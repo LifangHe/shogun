@@ -228,7 +228,7 @@ void CCARTree::set_max_depth(int32_t depth)
 int32_t CCARTree::get_min_node_size() const
 {
 	return m_min_node_size;
-}
+}	
 
 void CCARTree::set_min_node_size(int32_t nsize)
 {
@@ -240,6 +240,11 @@ void CCARTree::set_label_epsilon(float64_t ep)
 {
 	REQUIRE(ep>=0,"Input epsilon value is expected to be greater than or equal to 0\n")
 	m_label_epsilon=ep;
+}
+
+void CCARTree::set_pre_sort(bool presort)
+{
+	m_pre_sort=presort;
 }
 
 bool CCARTree::train_machine(CFeatures* data)
@@ -274,6 +279,9 @@ bool CCARTree::train_machine(CFeatures* data)
 		m_nominal.fill_vector(m_nominal.vector,m_nominal.vlen,false);
 	}
 
+	if (m_pre_sort)
+		pre_sort_features((dynamic_cast<CDenseFeatures<float64_t>*>(data))->get_feature_matrix());
+
 	set_root(CARTtrain(data,m_weights,m_labels,0));
 
 	if (m_apply_cv_pruning)
@@ -283,6 +291,29 @@ bool CCARTree::train_machine(CFeatures* data)
 	}
 
 	return true;
+}
+
+void CCARTree::pre_sort_features(const SGMatrix<float64_t>& data)
+{
+	SG_SPRINT("here");
+	m_pre_sort=true;
+	SGMatrix<float64_t> sorted_feats(data.num_cols, data.num_rows);
+	SGMatrix<int32_t> sorted_indices(data.num_cols, data.num_rows);
+	for(int32_t i=0; i<sorted_indices.num_cols; i++)
+		for(int32_t j=0; j<sorted_indices.num_rows; j++)
+			sorted_indices(j,i)=j;
+
+	Map<MatrixXd> map_sorted_feats(sorted_feats.matrix, data.num_cols, data.num_rows);
+	Map<MatrixXd> map_data(data.matrix, data.num_rows, data.num_cols);
+
+	map_sorted_feats=map_data.transpose();
+
+	for(int32_t i=0; i<sorted_feats.num_cols; i++)
+		CMath::qsort_index(sorted_feats.get_column_vector(i), sorted_indices.get_column_vector(i), sorted_feats.num_rows);
+
+	m_sorted_features=sorted_feats;
+	m_sorted_indices=sorted_indices;	
+
 }
 
 CBinaryTreeMachineNode<CARTreeNodeData>* CCARTree::CARTtrain(CFeatures* data, SGVector<float64_t> weights, CLabels* labels, int32_t level)
@@ -384,8 +415,14 @@ CBinaryTreeMachineNode<CARTreeNodeData>* CCARTree::CARTtrain(CFeatures* data, SG
 	int32_t num_missing_final=0;
 	int32_t c_left=-1;
 	int32_t c_right=-1;
-
-	int32_t best_attribute=compute_best_attribute(mat,weights,labels_vec,left,right,left_final,num_missing_final,c_left,c_right);
+	int32_t best_attribute;
+	if (m_pre_sort)
+	{
+		SGVector<index_t> indices=((data->get_subset_stack())->get_last_subset())->get_subset_idx();
+		best_attribute=compute_best_attribute(m_sorted_features,weights,labels,left,right,left_final,num_missing_final,c_left,c_right,0,indices);
+	}
+	else
+		best_attribute=compute_best_attribute(mat,weights,labels,left,right,left_final,num_missing_final,c_left,c_right);
 
 	if (best_attribute==-1)
 	{
@@ -486,12 +523,17 @@ SGVector<float64_t> CCARTree::get_unique_labels(SGVector<float64_t> labels_vec, 
 	return ulabels;
 }
 
-int32_t CCARTree::compute_best_attribute(const SGMatrix<float64_t>& mat, const SGVector<float64_t>& weights, const SGVector<float64_t>& labels_vec,
+int32_t CCARTree::compute_best_attribute(const SGMatrix<float64_t>& mat, const SGVector<float64_t>& weights, CLabels* labels,
 	SGVector<float64_t>& left, SGVector<float64_t>& right, SGVector<bool>& is_left_final, int32_t &num_missing_final, int32_t &count_left,
-	int32_t &count_right, int32_t subset_size)
+	int32_t &count_right, int32_t subset_size, const SGVector<index_t>& active_indices)
 {
-	int32_t num_vecs=mat.num_cols;
-	int32_t num_feats=mat.num_rows;
+	SGVector<float64_t> labels_vec=(dynamic_cast<CDenseLabels*>(labels))->get_labels();	
+	int32_t num_vecs=labels->get_num_labels();
+	int32_t num_feats;
+	if (m_pre_sort)
+		num_feats=mat.num_cols;
+	else
+		num_feats=mat.num_rows;		
 
 	int32_t n_ulabels;
 	SGVector<float64_t> ulabels=get_unique_labels(labels_vec,n_ulabels);
@@ -535,13 +577,39 @@ int32_t CCARTree::compute_best_attribute(const SGMatrix<float64_t>& mat, const S
 	for (int32_t i=0;i<num_feats;i++)
 	{
 		SGVector<float64_t> feats(num_vecs);
-		for (int32_t j=0;j<num_vecs;j++)
-			feats[j]=mat(idx[i],j);
-
-		// O(N*logN)
 		SGVector<index_t> sorted_args(feats.size());
-		sorted_args.range_fill();
-		CMath::qsort_index(feats.vector, sorted_args.vector, feats.size());
+
+		if (m_pre_sort)
+		{
+			SG_SPRINT("here");
+			SGVector<int32_t> indices_mask(mat.num_rows);
+			indices_mask.set_const(-1);
+			for(int32_t j=0;j<active_indices.size();j++)
+				indices_mask[active_indices[j]]=j;
+
+			SGVector<float64_t> temp_vec(mat.get_column_vector(idx[i]), num_vecs, false);
+			int32_t count=0;
+			for(int32_t j=0;j<mat.num_rows;j++)
+			{
+				if (indices_mask[m_sorted_indices[j]]>=0)
+				{
+					feats[count]=temp_vec[j];
+					sorted_args[count]=indices_mask[m_sorted_indices[j]];
+					++count;
+					if (count==num_vecs)
+						break;
+				}
+			}			
+		}
+		else
+		{
+			for (int32_t j=0;j<num_vecs;j++)
+				feats[j]=mat(idx[i],j);
+
+			// O(N*logN)
+			sorted_args.range_fill();
+			CMath::qsort_index(feats.vector, sorted_args.vector, feats.size());
+		}
 
 		// number of non-missing vecs
 		int32_t n_nm_vecs=feats.vlen;
@@ -1368,6 +1436,7 @@ void CCARTree::init()
 	m_nominal=SGVector<bool>();
 	m_weights=SGVector<float64_t>();
 	m_mode=PT_MULTICLASS;
+	m_pre_sort=false;
 	m_types_set=false;
 	m_weights_set=false;
 	m_apply_cv_pruning=false;

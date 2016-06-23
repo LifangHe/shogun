@@ -225,7 +225,11 @@ public:
 	 */
 	 void set_label_epsilon(float64_t epsilon);
 
+	 void set_pre_sort(bool presort);
+
 protected:
+
+	 void pre_sort_features(const SGMatrix<float64_t>& data);
 
 	/** train machine - build CART from training data
 	 * @param data training data
@@ -264,9 +268,9 @@ protected:
 	 * @param count_right stores number of feature values for right transition
 	 * @return index to the best attribute
 	 */
-	virtual int32_t compute_best_attribute(const SGMatrix<float64_t>& mat, const SGVector<float64_t>& weights, const SGVector<float64_t>& labels_vec,
+	virtual int32_t compute_best_attribute(const SGMatrix<float64_t>& mat, const SGVector<float64_t>& weights, CLabels* labels,
 		SGVector<float64_t>& left, SGVector<float64_t>& right, SGVector<bool>& is_left_final, int32_t &num_missing,
-		int32_t &count_left, int32_t &count_right, int32_t subset_size=0);
+		int32_t &count_left, int32_t &count_right, int32_t subset_size=0, const SGVector<int32_t>& active_indices=SGVector<index_t>());
 
 
 	/** handles missing values through surrogate splits
@@ -426,6 +430,12 @@ protected:
 
 	/** weights of samples in training set **/
 	SGVector<float64_t> m_weights;
+
+	SGMatrix<float64_t> m_sorted_features;
+
+	SGMatrix<int32_t> m_sorted_indices;
+
+	bool m_pre_sort;
 
 	/** flag storing whether the type of various feature dimensions are specified using is_nominal_feature **/
 	bool m_types_set;

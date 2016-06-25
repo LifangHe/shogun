@@ -279,9 +279,6 @@ bool CCARTree::train_machine(CFeatures* data)
 		m_nominal.fill_vector(m_nominal.vector,m_nominal.vlen,false);
 	}
 
-	if (m_pre_sort)
-		pre_sort_features((dynamic_cast<CDenseFeatures<float64_t>*>(data))->get_feature_matrix());
-
 	set_root(CARTtrain(data,m_weights,m_labels,0));
 
 	if (m_apply_cv_pruning)
@@ -293,12 +290,15 @@ bool CCARTree::train_machine(CFeatures* data)
 	return true;
 }
 
-void CCARTree::pre_sort_features(const SGMatrix<float64_t>& data)
+void CCARTree::set_sorted_features(SGMatrix<float64_t>& sorted_feats, SGMatrix<int32_t>& sorted_indices)
 {
-	SG_SPRINT("here");
-	m_pre_sort=true;
-	SGMatrix<float64_t> sorted_feats(data.num_cols, data.num_rows);
-	SGMatrix<int32_t> sorted_indices(data.num_cols, data.num_rows);
+	m_pre_sort=true;	
+	m_sorted_features=sorted_feats;
+	m_sorted_indices=sorted_indices;
+}
+
+void CCARTree::pre_sort_features(const SGMatrix<float64_t>& data, SGMatrix<float64_t>& sorted_feats, SGMatrix<int32_t>& sorted_indices)
+{
 	for(int32_t i=0; i<sorted_indices.num_cols; i++)
 		for(int32_t j=0; j<sorted_indices.num_rows; j++)
 			sorted_indices(j,i)=j;
@@ -310,9 +310,6 @@ void CCARTree::pre_sort_features(const SGMatrix<float64_t>& data)
 
 	for(int32_t i=0; i<sorted_feats.num_cols; i++)
 		CMath::qsort_index(sorted_feats.get_column_vector(i), sorted_indices.get_column_vector(i), sorted_feats.num_rows);
-
-	m_sorted_features=sorted_feats;
-	m_sorted_indices=sorted_indices;	
 
 }
 
@@ -416,9 +413,14 @@ CBinaryTreeMachineNode<CARTreeNodeData>* CCARTree::CARTtrain(CFeatures* data, SG
 	int32_t c_left=-1;
 	int32_t c_right=-1;
 	int32_t best_attribute;
+	
+	SGVector<index_t> indices(num_vecs);
 	if (m_pre_sort)
 	{
-		SGVector<index_t> indices=((data->get_subset_stack())->get_last_subset())->get_subset_idx();
+		if (data->get_subset_stack()->has_subsets())
+			indices=((data->get_subset_stack())->get_last_subset())->get_subset_idx();
+		else
+			indices.range_fill();		
 		best_attribute=compute_best_attribute(m_sorted_features,weights,labels,left,right,left_final,num_missing_final,c_left,c_right,0,indices);
 	}
 	else
@@ -574,32 +576,52 @@ int32_t CCARTree::compute_best_attribute(const SGMatrix<float64_t>& mat, const S
 	float64_t max_gain=MIN_SPLIT_GAIN;
 	int32_t best_attribute=-1;
 	float64_t best_threshold=0;
+
+	SGVector<int32_t> indices_mask;
+	SGVector<int32_t> count_indices(mat.num_rows);
+	count_indices.zero();
+	SGVector<int32_t> dupes(num_vecs);
+	dupes.range_fill();
+	if (m_pre_sort)
+	{
+		indices_mask = SGVector<int32_t>(mat.num_rows);
+		indices_mask.set_const(-1);
+		for(int32_t j=0;j<active_indices.size();j++)
+		{
+			if (indices_mask[active_indices[j]]>=0)
+				dupes[indices_mask[active_indices[j]]]=j;
+			indices_mask[active_indices[j]]=j;
+			count_indices[active_indices[j]]++;
+		}
+	}
+
 	for (int32_t i=0;i<num_feats;i++)
 	{
 		SGVector<float64_t> feats(num_vecs);
 		SGVector<index_t> sorted_args(feats.size());
+		SGVector<int32_t> temp_count_indices(count_indices.size());
+		memcpy(temp_count_indices.vector, count_indices.vector, sizeof(int32_t)*count_indices.size());
 
 		if (m_pre_sort)
 		{
-			SG_SPRINT("here");
-			SGVector<int32_t> indices_mask(mat.num_rows);
-			indices_mask.set_const(-1);
-			for(int32_t j=0;j<active_indices.size();j++)
-				indices_mask[active_indices[j]]=j;
-
-			SGVector<float64_t> temp_vec(mat.get_column_vector(idx[i]), num_vecs, false);
+			SGVector<float64_t> temp_vec(mat.get_column_vector(idx[i]), mat.num_rows, false);
+			SGVector<int32_t> sorted_indices(m_sorted_indices.get_column_vector(idx[i]), mat.num_rows, false);
 			int32_t count=0;
 			for(int32_t j=0;j<mat.num_rows;j++)
 			{
-				if (indices_mask[m_sorted_indices[j]]>=0)
+				if (indices_mask[sorted_indices[j]]>=0)
 				{
-					feats[count]=temp_vec[j];
-					sorted_args[count]=indices_mask[m_sorted_indices[j]];
-					++count;
+					while(temp_count_indices[sorted_indices[j]]>0)
+					{
+						feats[count]=temp_vec[j];
+						sorted_args[count]=indices_mask[sorted_indices[j]];
+						++count;
+						--temp_count_indices[sorted_indices[j]];
+					}
 					if (count==num_vecs)
 						break;
 				}
-			}			
+			}
 		}
 		else
 		{
@@ -610,7 +632,6 @@ int32_t CCARTree::compute_best_attribute(const SGMatrix<float64_t>& mat, const S
 			sorted_args.range_fill();
 			CMath::qsort_index(feats.vector, sorted_args.vector, feats.size());
 		}
-
 		// number of non-missing vecs
 		int32_t n_nm_vecs=feats.vlen;
 		while (feats[n_nm_vecs-1]==MISSING)
@@ -679,7 +700,12 @@ int32_t CCARTree::compute_best_attribute(const SGMatrix<float64_t>& mat, const S
 					else
 						wright[simple_labels[sorted_args[j]]]+=weights[sorted_args[j]];
 				}
-
+				for (int32_t j=n_nm_vecs-1;j>=0;j--)
+				{
+					if(dupes[j]!=j)
+						is_left[j]=is_left[dupes[j]];
+				}
+				
 				float64_t g=0;
 				if (m_mode==PT_MULTICLASS)
 					g=gain(wleft,wright,total_wclasses);
@@ -775,8 +801,33 @@ int32_t CCARTree::compute_best_attribute(const SGMatrix<float64_t>& mat, const S
 		right[0]=best_threshold;
 		count_left=1;
 		count_right=1;
-		for (int32_t i=0;i<num_vecs;i++)
-			is_left_final[i]=(mat(best_attribute,i)<=best_threshold);
+		if (m_pre_sort)
+		{
+			SGVector<float64_t> temp_vec(mat.get_column_vector(best_attribute), mat.num_rows, false);			
+			SGVector<int32_t> sorted_indices(m_sorted_indices.get_column_vector(best_attribute), mat.num_rows, false);
+			int32_t count=0;
+			for(int32_t i=0;i<mat.num_rows;i++)
+			{
+				if (indices_mask[sorted_indices[i]]>=0)
+				{
+					is_left_final[indices_mask[sorted_indices[i]]]=(temp_vec[i]<=best_threshold);
+					++count;
+					if (count==num_vecs)
+						break;
+				}
+			}
+			for (int32_t i=num_vecs-1;i>=0;i--)
+			{
+				if(dupes[i]!=i)
+					is_left_final[i]=is_left_final[dupes[i]];
+			}
+				
+		}	
+		else
+		{
+			for (int32_t i=0;i<num_vecs;i++)
+				is_left_final[i]=(mat(best_attribute,i)<=best_threshold);
+		}
 	}
 
 	return best_attribute;
@@ -1447,6 +1498,9 @@ void CCARTree::init()
 	m_min_node_size=0;
 	m_label_epsilon=1e-7;
 
+	SG_ADD(&m_pre_sort,"m_pre_sort","presort", MS_NOT_AVAILABLE);
+	SG_ADD(&m_sorted_features,"m_sorted_features", "sorted feats", MS_NOT_AVAILABLE);
+	SG_ADD(&m_sorted_indices,"m_sorted_indices", "sorted indices", MS_NOT_AVAILABLE);
 	SG_ADD(&m_nominal,"m_nominal", "feature types", MS_NOT_AVAILABLE);
 	SG_ADD(&m_weights,"m_weights", "weights", MS_NOT_AVAILABLE);
 	SG_ADD(&m_weights_set,"m_weights_set", "weights set", MS_NOT_AVAILABLE);

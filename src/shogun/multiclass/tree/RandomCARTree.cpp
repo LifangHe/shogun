@@ -54,14 +54,19 @@ int32_t CRandomCARTree::compute_best_attribute(const SGMatrix<float64_t>& mat, c
 	int32_t &count_right, int32_t subset_size, const SGVector<index_t>& active_indices)
 
 {
-	REQUIRE(m_randsubset_size<=mat.num_rows, "The Feature subset size(set %d) should be less than"
-	" or equal to the total number of features(%d here)\n",m_randsubset_size,mat.num_rows)
+	int32_t num_feats;
+	if(m_pre_sort)
+		num_feats=mat.num_cols;
+	else
+		num_feats=mat.num_rows;
+	subset_size=m_randsubset_size;
+	
+	REQUIRE(subset_size<=num_feats, "The Feature subset size(set %d) should be less than"
+	" or equal to the total number of features(%d here)\n",subset_size,num_feats)
 
 	// if subset size is not set choose sqrt(num_feats) by default
 	if (m_randsubset_size==0)
 		m_randsubset_size=CMath::sqrt(mat.num_rows-0.f);
-
-	subset_size=m_randsubset_size;
 
 	return CCARTree::compute_best_attribute(mat,weights,labels,left,right,is_left_final,num_missing_final,count_left,count_right,subset_size, active_indices);
 

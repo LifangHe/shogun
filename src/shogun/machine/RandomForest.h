@@ -139,6 +139,8 @@ public:
 	int32_t get_num_random_features() const;
 
 protected:
+
+	virtual bool train_machine(CFeatures* data);
 	/** sets parameters of CARTree - sets machine labels and weights here
 	 *
 	 * @param m machine
@@ -154,6 +156,8 @@ private:
 	/** weights */
 	SGVector<float64_t> m_weights;
 
+	SGMatrix<float64_t> m_sorted_feats;
+	SGMatrix<int32_t> m_sorted_indices;
 };
 } /* namespace shogun */
 #endif /* _RANDOMFOREST_H__ */

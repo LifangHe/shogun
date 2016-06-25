@@ -159,15 +159,24 @@ void CRandomForest::set_machine_parameters(CMachine* m, SGVector<index_t> idx)
 	}
 
 	tree->set_weights(weights);
-	tree->set_pre_sort(true);
+	tree->set_sorted_features(m_sorted_feats, m_sorted_indices);
 	// equate the machine problem types - cloning does not do this
 	tree->set_machine_problem_type(dynamic_cast<CRandomCARTree*>(m_machine)->get_machine_problem_type());
+}
+
+bool CRandomForest::train_machine(CFeatures* data)
+{
+	SGMatrix<float64_t> mat=(dynamic_cast<CDenseFeatures<float64_t>*>(data))->get_feature_matrix();
+	m_sorted_feats = SGMatrix<float64_t>(mat.num_cols, mat.num_rows);
+	m_sorted_indices = SGMatrix<int32_t>(mat.num_cols, mat.num_rows);
+	dynamic_cast<CRandomCARTree*>(m_machine)->pre_sort_features(mat, m_sorted_feats, m_sorted_indices);
+
+	return CBaggingMachine::train_machine(data);	
 }
 
 void CRandomForest::init()
 {
 	m_machine=new CRandomCARTree();
-	dynamic_cast<CRandomCARTree*>(m_machine)->set_pre_sort(true);
 	m_weights=SGVector<float64_t>();
 
 	SG_ADD(&m_weights,"m_weights","weights",MS_NOT_AVAILABLE)

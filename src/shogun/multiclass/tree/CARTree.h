@@ -226,11 +226,12 @@ public:
 	 void set_label_epsilon(float64_t epsilon);
 
 	 void set_pre_sort(bool presort);
+	 
+	 void pre_sort_features(const SGMatrix<float64_t>& data, SGMatrix<float64_t>& sorted_feats, SGMatrix<int32_t>& sorted_indices);
+	 
+	void set_sorted_features(SGMatrix<float64_t>& sorted_feats, SGMatrix<int32_t>& sorted_indices);
 
 protected:
-
-	 void pre_sort_features(const SGMatrix<float64_t>& data);
-
 	/** train machine - build CART from training data
 	 * @param data training data
 	 * @return true
@@ -407,6 +408,7 @@ protected:
 
 	/** initializes members of class */
 	void init();
+
 
 public:
 	/** denotes that a feature in a vector is missing MISSING = NOT_A_NUMBER */
